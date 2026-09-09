@@ -547,7 +547,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.09.27";   // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.09.28";   // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1757,8 +1757,8 @@
   }
   function taskSubText(x, overdue){
     if(x.flash){
-      let s='<span class="tag" style="background:#fff0e6;color:#d9480f;border-color:#ffd8a8">突发事项</span>';
-      if(!x.due && !x.start && x.regTime) s+='　登记 '+esc(x.regTime);
+      /* 「突发事项」标签已在标题旁渲染一次，这里不再重复，只补 登记时间 / 自定义标签 */
+      let s=x.regTime?('登记 '+esc(x.regTime)):'';
       s+=tagPills(x.tags);
       return s;
     }
