@@ -429,6 +429,12 @@
     .rt-item .rt-tags{order:2}
     .rt-item .icon-btn[data-redit]{order:3;margin-left:auto}
     .rt-item .icon-btn.danger{order:4}
+    /* 备忘列表：操作按钮（完成/上移/下移/编辑/删除）收窄，避免挤占正文 */
+    #memo-list .item-row{align-items:center}
+    #memo-list .item-main{flex:1 1 120px}
+    #memo-list .item-actions{gap:6px}
+    #memo-list .icon-btn{width:30px;height:30px;flex:0 0 30px;border-radius:8px}
+    #memo-list .icon-btn svg{width:13px;height:13px}
   }
   @media (max-width:380px){
     .gantt-grid{--gc:38px}
@@ -541,7 +547,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.09.26";   // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.09.27";   // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
