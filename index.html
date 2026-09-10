@@ -562,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.10.32"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.10.33"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1080,26 +1080,37 @@
   }
 
   /* 任务是否应出现在「今日待办」：普通任务从开始日(默认当天)起每日显示直至完成；提醒任务仅到期日及逾期显示 */
+  /* 规则：只要没完成就出现在今日待办——有到期日的按日呈现（逾期/今天到期/进行中），
+     未设到期日的（突发、随手记的事项）也一律保留，避免"今天该做的事"被静默漏掉 */
   function taskVisibleToday(x, t){
     if(x.archived || x.status==="done") return false;
-    if(!x.due) return false;
+    if(!x.due) return true;                         // 未设期限：一直显示到做完
     if(x.remind) return x.due <= t;                 // 提醒型：只在到期日（及之后逾期）出现
     const s = x.start || x.created || t;            // 普通型：从开始日（默认创建当天）起每日出现
     return s <= t;
   }
   function taskMeta(x, t){
+    if(!x.due) return {cls:"", text:x.flash?"突发 · 未设期限":"未设期限"};
     if(x.due < t) return {cls:"over", text:"逾期 "+x.due};
     if(x.due === t) return {cls:"", text:"今天到期 "+x.due};
     if(x.remind) return {cls:"", text:"到期 "+x.due};
     const s = x.start || x.created;
     return {cls:"", text:(s&&s!==x.due?(s+" → "):"进行中 · 至 ")+x.due};
   }
+  /* 排序：逾期(最早) → 今天到期 → 未来到期 → 未设期限（置底，按创建时间） */
+  function todayTaskSort(a,b){
+    const ka = a.due?0:1, kb = b.due?0:1;
+    if(ka!==kb) return ka-kb;
+    if(ka===1) return String(a.created||a.regTime||"").localeCompare(String(b.created||b.regTime||""));
+    const d = String(a.due||"").localeCompare(String(b.due||""));
+    if(d) return d;
+    return (a.flash?0:1)-(b.flash?0:1);
+  }
 
   /* ---------- 每日待办横幅（贴在日历 / 代办 / 会议板块上方） ---------- */
   function dailyTasksHtml(){
     const t = todayStr();
-    const list = state.tasks.filter(x=> taskVisibleToday(x, t))
-      .sort((a,b)=> (a.due||"").localeCompare(b.due||""));
+    const list = state.tasks.filter(x=> taskVisibleToday(x, t)).sort(todayTaskSort);
     if(!list.length){
       return `<div class="card daily-banner"><div class="db-head"><span class="db-t">今日待办</span><span class="db-sub">今天没有需要处理的待办，状态良好 ✓</span></div></div>`;
     }
@@ -1129,7 +1140,7 @@
     const now = new Date();
     const wd = ["周日","周一","周二","周三","周四","周五","周六"][now.getDay()];
     const greet = now.getHours()<12?"早上好":(now.getHours()<18?"下午好":"晚上好");
-    const todos = state.tasks.filter(x=> taskVisibleToday(x, t)).sort((a,b)=>(a.due||"").localeCompare(b.due||""));
+    const todos = state.tasks.filter(x=> taskVisibleToday(x, t)).sort(todayTaskSort);
     const t7 = dstr(addDays(6));   // 近一周：今天 ~ 今天+6，共 7 天（含今天）
     const upcoming = state.meetings.filter(x=> x.date>=t && x.date<=t7)
       .sort((a,b)=> ((a.date||"")+(a.time||"")).localeCompare((b.date||"")+(b.time||""))).slice(0,6);
