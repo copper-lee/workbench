@@ -227,6 +227,21 @@
   .rep-kpi .kpi .n{font-size:22px;font-weight:800;color:var(--primary)}
   .rep-kpi .kpi .l{font-size:12px;color:var(--muted)}
   .rep-narr{background:#f8fafc;border-left:3px solid var(--primary);border-radius:0 10px 10px 0;padding:10px 14px;font-size:14px;line-height:1.6}
+  /* AI 复盘结果区 */
+  .ai-sec{border:1px solid #d6e4ff;background:linear-gradient(135deg,#f7faff 0%,#ffffff 100%);border-radius:14px;padding:12px 14px}
+  .ai-sec h3 .ai-meta{font-size:11.5px;font-weight:500;color:var(--muted);margin-left:auto}
+  .ai-out{font-size:14px;line-height:1.75;color:var(--text)}
+  .ai-out h3,.ai-out h4{font-size:14.5px;font-weight:700;margin:12px 0 6px;color:var(--text)}
+  .ai-out h3:first-child,.ai-out h4:first-child{margin-top:0}
+  .ai-out p{margin:6px 0}
+  .ai-out ul,.ai-out ol{margin:6px 0;padding-left:20px}
+  .ai-out li{margin:4px 0}
+  .ai-out b{color:var(--primary)}
+  .ai-out.ai-empty{color:var(--muted);font-size:13.5px;background:#fff;border:1px dashed var(--border);border-radius:10px;padding:10px 12px}
+  .ai-loading{color:var(--primary);font-size:13.5px}
+  .ai-err{color:var(--danger);font-size:13.5px;background:#fff5f5;border:1px solid #f3c9c9;border-radius:10px;padding:10px 12px}
+  .ai-acts{display:flex;gap:8px;margin-top:10px}
+  .ai-acts .btn{padding:6px 12px;font-size:13px}
   .seg{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
   .seg button{border:1px solid var(--border);background:#fff;border-radius:999px;padding:7px 14px;font-size:13.5px;cursor:pointer;color:var(--muted);font-family:inherit}
   .seg button.active{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
@@ -547,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.09.28";   // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.10.32"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -909,7 +924,7 @@
   let _pushTimer=null;
   let _snap=null;   // 上次保存的 state JSON 快照，用于检测"内容真正变化"的条目并打 updatedAt（双向同步合并用）
   function save(){
-    const ARRAYS=['tasks','meetings','memos','ideas','projects','routines','misc'];
+    const ARRAYS=['tasks','meetings','memos','ideas','projects','routines','misc','aiReviews'];
     if(_snap){
       let prev={};
       try{ prev=JSON.parse(_snap); }catch(e){ prev={}; }
@@ -964,6 +979,24 @@
   }
   if(!state.settings) state.settings={wxWebhook:"",wxChannel:"wx"};
   if(!state.settings.sync) state.settings.sync={enabled:false,token:"",gistId:"",updatedAt:0};
+  /* AI 复盘：OpenAI 兼容接口直连（已实测四家均支持浏览器跨域）
+     AI_ENABLED = false 时：复盘页隐藏「✨ AI 生成复盘」按钮与 AI 结果区，设置页隐藏「AI 复盘」配置；
+     代码与已生成的复盘数据（state.aiReviews）全部保留，改成 true 即恢复，无需重新配置。 */
+  const AI_ENABLED = false;
+  const AI_PROVIDERS={
+    deepseek:{n:"DeepSeek", url:"https://api.deepseek.com/v1/chat/completions", model:"deepseek-v4-flash", tip:"platform.deepseek.com 实名后建 Key 并充值（余额需 >0）。V4-Flash 约 1.5~3 元/百万输入 token，做一次复盘通常几分钱"},
+    zhipu:{n:"智谱 GLM", url:"https://open.bigmodel.cn/api/paas/v4/chat/completions", model:"glm-4-flash", tip:"open.bigmodel.cn，glm-4-flash 有免费额度"},
+    bailian:{n:"阿里云百炼（通义）", url:"https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", model:"qwen-plus", tip:"bailian.console.aliyun.com 开通后创建 Key"},
+    silicon:{n:"硅基流动", url:"https://api.siliconflow.cn/v1/chat/completions", model:"Qwen/Qwen2.5-7B-Instruct", tip:"siliconflow.cn，聚合多家开源模型"},
+    custom:{n:"自定义（OpenAI 兼容）", url:"", model:"", tip:"任意 OpenAI 兼容的 /chat/completions 地址"}
+  };
+  if(!state.settings.ai) state.settings.ai={provider:"deepseek", baseUrl:AI_PROVIDERS.deepseek.url, model:AI_PROVIDERS.deepseek.model, key:"", syncKey:false};
+  /* 旧模型名已下线（deepseek-chat / deepseek-reasoner 于 2026-07 退役），静默升级为 V4-Flash */
+  if(state.settings.ai && (state.settings.ai.model==="deepseek-chat" || state.settings.ai.model==="deepseek-reasoner")){
+    state.settings.ai.model=AI_PROVIDERS.deepseek.model;
+    if(!state.settings.ai.baseUrl || state.settings.ai.baseUrl.indexOf("api.deepseek.com/v1")<0) state.settings.ai.baseUrl=AI_PROVIDERS.deepseek.url;
+  }
+  if(!state.aiReviews) state.aiReviews=[];
   if(!state.meta) state.meta={updatedAt:Date.now()};
   if(!state.routines) state.routines=[];
   if(!state.tasks) state.tasks=[];
@@ -2319,6 +2352,7 @@
     const now=new Date(); now.setHours(0,0,0,0);
     if(period==="day"){ return {from:todayStr(), to:todayStr(), label:todayStr()}; }
     if(period==="week"){ const dow=now.getDay(); const mon=new Date(now); mon.setDate(now.getDate()-(dow===0?6:dow-1)); const sun=new Date(mon); sun.setDate(mon.getDate()+6); return {from:dstr(mon), to:dstr(sun), label:dstr(mon)+" ~ "+dstr(sun)}; }
+    if(period==="year"){ const y=now.getFullYear(); return {from:y+"-01-01", to:y+"-12-31", label:y+" 年"}; }
     const m1=new Date(now.getFullYear(),now.getMonth(),1), m2=new Date(now.getFullYear(),now.getMonth()+1,0);
     return {from:dstr(m1), to:dstr(m2), label:now.getFullYear()+" 年 "+(now.getMonth()+1)+" 月"};
   }
@@ -2329,10 +2363,11 @@
     if(period==="day"){ return dateStr===todayStr(); }
     if(period==="week"){ const dow=now.getDay(); const mon=new Date(now); mon.setDate(now.getDate()-(dow===0?6:dow-1)); const sun=new Date(mon); sun.setDate(mon.getDate()+6); return d>=mon && d<=sun; }
     if(period==="month"){ const m1=new Date(now.getFullYear(),now.getMonth(),1), m2=new Date(now.getFullYear(),now.getMonth()+1,0); return d>=m1 && d<=m2; }
+    if(period==="year"){ return d.getFullYear()===now.getFullYear(); }
     return false;
   }
   function autoNarrative(s){
-    const p = s.period==="day"?"今日":(s.period==="week"?"本周":"本月");
+    const p = s.period==="day"?"今日":(s.period==="week"?"本周":(s.period==="month"?"本月":"本年"));
     if(s.done===0 && s.overdue===0 && s.meets===0 && s.prog===0){
       return p+"整体节奏平稳，暂无新增完成项与会议记录。可抽空梳理下一步计划，保持项目推进。";
     }
@@ -2344,18 +2379,156 @@
     main += s.overdue>0 ? ("需重点关注 "+s.overdue+" 项逾期待办，建议优先清理或调整排期。") : "各项任务进度正常，无明显逾期风险。";
     return main;
   }
+  /* ---------- AI 复盘：真实大模型（OpenAI 兼容接口，浏览器直连） ---------- */
+  function aiCfg(){
+    const a=(state.settings && state.settings.ai) || {};
+    const p=AI_PROVIDERS[a.provider||"deepseek"] || AI_PROVIDERS.deepseek;
+    return {provider:a.provider||"deepseek", baseUrl:(a.baseUrl||p.url||"").trim(), model:(a.model||p.model||"").trim(), key:(a.key||"").trim(), syncKey:!!a.syncKey};
+  }
+  function aiReady(){ const c=aiCfg(); return !!(c.baseUrl && c.model && c.key); }
+  function aiErrMsg(status, detail){
+    const d=detail?("（"+detail+"）"):"";
+    if(status===401) return "API Key 无效或已失效"+d;
+    if(status===403) return "该 Key 没有此模型的权限"+d;
+    if(status===402) return "账户余额不足，请充值后重试"+d;
+    if(status===404) return "接口地址或模型名不存在，请检查"+d;
+    if(status===429) return "请求过于频繁或额度用尽"+d;
+    if(status>=500) return "模型服务端异常，请稍后重试"+d;
+    return "HTTP "+status+d;
+  }
+  async function aiChat(messages, maxTokens){
+    const c=aiCfg();
+    const body={model:c.model, messages:messages, temperature:0.5, stream:false};
+    if(maxTokens) body.max_tokens=maxTokens;
+    let res, ctrl=null, timer=null;
+    try{
+      if(typeof AbortController!=="undefined"){ ctrl=new AbortController(); timer=setTimeout(()=>{ try{ ctrl.abort(); }catch(e){} }, 90000); }
+      res=await fetch(c.baseUrl,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+c.key},body:JSON.stringify(body),signal:ctrl?ctrl.signal:undefined});
+    }catch(e){
+      const aborted = e && (e.name==="AbortError");
+      throw new Error(aborted ? "请求超时（90 秒无响应），可稍后重试或换更快的模型" : "网络请求失败（可能是接口地址不对、网络受限，或该服务不允许网页直连）");
+    }finally{ if(timer) clearTimeout(timer); }
+    if(!res.ok){
+      let detail="";
+      try{ const j=await res.json(); detail=(j && j.error && (j.error.message||j.error.code)) || (j && j.message) || ""; }catch(e){}
+      throw new Error(aiErrMsg(res.status, detail));
+    }
+    let j; try{ j=await res.json(); }catch(e){ throw new Error("返回内容不是合法 JSON，接口地址可能填错"); }
+    const ch=j && j.choices && j.choices[0];
+    const t=ch && ((ch.message && ch.message.content) || ch.text);
+    if(!t || !String(t).trim()) throw new Error("模型返回内容为空");
+    return String(t).trim();
+  }
+  async function aiTest(){
+    if(!aiReady()){ toast("请先填写接口地址、模型名和 API Key"); return; }
+    toast("正在测试连接…");
+    try{ const t=await aiChat([{role:"user",content:"只回复两个字：正常"}], 16); toast("连接成功：" + String(t).slice(0,12)); }
+    catch(e){ toast("测试失败：" + e.message); }
+  }
+  /* 采集某个周期的全部事实数据，供页面统计与 AI 提示词复用 */
+  function periodFacts(period){
+    const rng=periodRange(period);
+    return {
+      rng,
+      doneTasks: state.tasks.filter(x=>(x.status==="done"||x.archived) && x.doneAt && inPeriod(x.doneAt, period)),
+      overdueTasks: state.tasks.filter(x=>!(x.archived||x.status==="done") && x.due && x.due<todayStr()),
+      openTasks: state.tasks.filter(x=>!(x.archived||x.status==="done")),
+      meetings: state.meetings.filter(x=>inPeriod(x.date, period)),
+      progUpdates: (function(){ const a=[]; state.projects.forEach(p=>{ (p.progress||[]).forEach(pr=>{ if(inPeriod(String(pr.t).split(" ")[0], period)) a.push({proj:p.title, t:pr.t, text:pr.text}); }); }); return a; })(),
+      memos: state.memos.filter(x=>memoGroup(x)!=="erp" && inPeriod(String(x.updated||x.created||"").split(" ")[0], period)),   // ERP 账号不进复盘
+      ideas: state.ideas.filter(x=>inPeriod(x.created, period)),
+      flash: state.tasks.filter(x=>x.flash && ((x.doneAt&&inPeriod(x.doneAt, period)) || (!x.doneAt && inPeriod(x.created, period))))
+    };
+  }
+  function aiReviewPrompt(period, f){
+    const p = period==="day" ? "今日" : (period==="week" ? "本周" : (period==="month" ? "本月" : "本年度"));
+    const np = period==="day" ? "明日" : (period==="week" ? "下周" : (period==="month" ? "下月" : "明年"));
+    const Y = period==="year";
+    const cap = (a,b)=> Y ? b : a;   // 年度周期数据量更大，放宽条数上限
+    const pack={
+      统计区间: f.rng.label,
+      已完成: f.doneTasks.slice(0,cap(80,400)).map(x=>({事项:x.title, 标签:x.tags||"", 原定到期:x.due||"", 完成日:x.doneAt||"", 备注:cleanNote(x.note)})),
+      未完成: f.openTasks.slice(0,cap(80,300)).map(x=>({事项:x.title, 开始:x.start||"", 到期:x.due||"", 已逾期:!!(x.due && x.due<todayStr()), 标签:x.tags||"", 备注:cleanNote(x.note)})),
+      会议: f.meetings.slice(0,cap(60,300)).map(x=>({日期:x.date, 时间:x.time||"", 主题:x.title, 地点:x.location||"", 备注:x.note||""})),
+      项目进展: f.progUpdates.slice(0,cap(60,300)).map(x=>({项目:x.proj, 时间:x.t, 进展:x.text})),
+      新增备忘: f.memos.slice(0,cap(40,120)).map(x=>({标题:x.title, 内容:x.content||""})),
+      新增灵感: f.ideas.slice(0,cap(30,80)).map(x=>({内容:x.content, 标签:x.tag||""})),
+      突发事项: f.flash.slice(0,cap(40,150)).map(x=>({事项:x.title, 登记:x.regTime||""}))
+    };
+    const lines = [
+      "你是我的私人工作复盘助手。以下是我 "+f.rng.label+"（"+p+"）的真实工作数据（JSON）。",
+      "请只依据这些数据，写一份务实、具体、有判断的"+p+"工作复盘；严禁编造数据中不存在的事项、数字和结论。",
+      "输出 Markdown，包含以下小标题（用 ## 开头），不要寒暄、不要复述原始数据：",
+      "## 一、"+(Y?"年度概览（5 句话内：整体产出规模、几条主线、最重要的 1-2 个突破）":"本期概览（3 句话内点出关键数字与整体节奏）"),
+      "## 二、"+(Y?"年度主线（按业务主题归类，如 库存治理/客户与回款/系统与数据/流程与协同，每条写清这条线做了哪些事、推进到什么程度）":"主要成果（3-5 条，写清做了什么、对业务的意义）"),
+      "## 三、"+(Y?"重大事项与里程碑（挑 5-8 件真正有价值的事，按时间或重要性排列，标注关键数字：品规数、金额、覆盖客户数、周期缩短等，数据里没有具体数字就写「未记录」）":"问题与风险（2-4 条：逾期、久拖未办、会议占比过高、项目卡点等，要具体到事项）"),
+      "## 四、"+(Y?"问题与不足（3-5 条：反复拖延的事、长期没闭环的项目、流程或协同上的短板）":""+np+"建议（3-5 条可立即执行的动作）"),
+      "## 五、"+(Y?"明年方向（3-5 条，基于今年的缺口与未闭环事项给出）":"优先级待办 Top5（从未完成/逾期事项中挑，每条注明理由）")
+    ];
+    if(Y) lines.push("## 六、成果表述（可直接写进年终总结）——把上面的成果改写成 8-15 条正式、可引用的句子：以动词开头（牵头/推动/建立/完成/优化），带业务对象与价值，去掉口语和过程描述，数据里没有的数字不要编；每条一句话。");
+    lines.push("约束：中文；不写空话套话；总长 "+(Y?"1800":"700")+" 字以内；数据太少时直接说明「数据不足」并给出改进记录的建议。");
+    lines.push("数据如下：");
+    lines.push(JSON.stringify(pack));
+    return lines.join("\n");
+  }
+  function mdInline(s){ return String(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>"); }
+  function mdLite(s){
+    const t=String(s||"").replace(/\r/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const out=[]; let inUl=false, inOl=false;
+    const close=()=>{ if(inUl){ out.push("</ul>"); inUl=false; } if(inOl){ out.push("</ol>"); inOl=false; } };
+    t.split("\n").forEach(raw=>{
+      const line=raw.trim();
+      if(!line){ close(); return; }
+      let m=line.match(/^(#{1,4})\s*(.+)$/);
+      if(m){ close(); const lv=Math.min(4, m[1].length+1); out.push("<h"+lv+">"+mdInline(m[2])+"</h"+lv+">"); return; }
+      m=line.match(/^([-*•])\s+(.+)$/);
+      if(m){ if(!inUl){ close(); out.push("<ul>"); inUl=true; } out.push("<li>"+mdInline(m[2])+"</li>"); return; }
+      m=line.match(/^(\d+)[.、)]\s*(.+)$/);
+      if(m){ if(!inOl){ close(); out.push("<ol>"); inOl=true; } out.push("<li>"+mdInline(m[2])+"</li>"); return; }
+      close(); out.push("<p>"+mdInline(line)+"</p>");
+    });
+    close();
+    return out.join("");
+  }
+  function aiReviewKey(period, rng){ return period+"|"+rng.from+"~"+rng.to; }
+  function aiReviewGet(period, rng){ const k=aiReviewKey(period,rng); return ((state.aiReviews)||[]).find(x=>x.key===k)||null; }
+  function aiReviewSave(period, rng, text, model){
+    if(!state.aiReviews) state.aiReviews=[];
+    const k=aiReviewKey(period,rng);
+    const rec=state.aiReviews.find(x=>x.key===k);
+    if(rec){ rec.text=text; rec.model=model; rec.at=nowLocal(); rec.updatedAt=Date.now(); }
+    else state.aiReviews.push({id:uid(), key:k, period:period, from:rng.from, to:rng.to, text:text, model:model, at:nowLocal(), updatedAt:Date.now()});
+    save();
+  }
+  async function generateAiReview(period){
+    const f=periodFacts(period);
+    const out=document.getElementById("ai-out");
+    if(!aiReady()){ toast("请先在「设置 → AI 复盘」填写 API Key"); setView("settings"); return; }
+    const btn=document.getElementById("rep-ai");
+    if(out) out.innerHTML='<div class="ai-loading">AI 正在分析'+(period==="year"?"全年":"本期")+'数据…（'+(period==="year"?"年度数据量较大，通常 30~90 秒":"通常 10~30 秒")+'，请勿关闭页面）</div>';
+    if(btn){ btn.disabled=true; btn.textContent="生成中…"; }
+    try{
+      const text=await aiChat([
+        {role:"system", content:"你是严谨、务实的工作复盘助手，只依据用户提供的真实数据做分析，绝不编造。"},
+        {role:"user", content:aiReviewPrompt(period, f)}
+      ], period==="year" ? 3600 : 1600);   // 年度总结篇幅更长，放宽输出上限
+      aiReviewSave(period, f.rng, text, aiCfg().model);
+      toast("AI 复盘已生成");
+    }catch(e){
+      const msg=(e && e.message) ? e.message : String(e);
+      if(out) out.innerHTML='<div class="ai-err">生成失败：'+esc(msg)+'</div>';
+      toast("生成失败："+msg);
+      if(btn){ btn.disabled=false; btn.innerHTML="✨ AI 生成复盘"; }
+      return;
+    }
+    renderSummary();
+  }
   function renderSummary(){
     const period = repPeriod;
-    const labels={day:"每日工作复盘", week:"本周工作周报", month:"本月工作月报"};
-    const rng = periodRange(period);
-    const doneTasks = state.tasks.filter(x=> (x.status==="done"||x.archived) && x.doneAt && inPeriod(x.doneAt, period));
-    const overdueTasks = state.tasks.filter(x=> !(x.archived||x.status==="done") && x.due && x.due<todayStr());
-    const periodMeetings = state.meetings.filter(x=> inPeriod(x.date, period));
-    const progUpdates = [];
-    state.projects.forEach(p=>{ (p.progress||[]).forEach(pr=>{ if(inPeriod(String(pr.t).split(" ")[0], period)) progUpdates.push({proj:p.title, t:pr.t, text:pr.text}); }); });
-    const newMemos = state.memos.filter(x=> memoGroup(x)!=="erp" && inPeriod(String(x.updated||x.created||"").split(" ")[0], period));   // ERP 账号不计入工作复盘
-    const newIdeas = state.ideas.filter(x=> inPeriod(x.created, period));
-    const flashList = state.tasks.filter(x=> x.flash && ((x.doneAt&&inPeriod(x.doneAt, period)) || (!x.doneAt && inPeriod(x.created, period))));
+    const labels={day:"每日工作复盘", week:"本周工作周报", month:"本月工作月报", year:"年度工作总结"};
+    const f = periodFacts(period);
+    const rng = f.rng, doneTasks = f.doneTasks, overdueTasks = f.overdueTasks, periodMeetings = f.meetings;
+    const progUpdates = f.progUpdates, newMemos = f.memos, newIdeas = f.ideas, flashList = f.flash;
     const kpis = [
       {n:doneTasks.length, l:"完成工作"},
       {n:overdueTasks.length, l:"逾期待办"},
@@ -2372,12 +2545,15 @@
     const meetList = listHtml(periodMeetings, x=>`<li>${esc((x.date||'')+' '+(x.time||''))} ｜ ${esc(x.title)}${x.location?(' ｜ '+esc(x.location)):''}</li>`);
     const progList = listHtml(progUpdates, x=>`<li><b>${esc(x.proj)}</b> · ${esc(x.t)}：${esc(x.text)}</li>`);
     const narr = autoNarrative({period, done:doneTasks.length, overdue:overdueTasks.length, meets:periodMeetings.length, prog:progUpdates.length});
+    const aiRec = aiReviewGet(period, f.rng);
     let html = `<div class="view-head"><span class="sub">${viewMeta.summary.s}</span></div>`;
     html += `<div class="seg no-print">
       <button data-rep="day" class="${period==='day'?'active':''}">每日复盘</button>
       <button data-rep="week" class="${period==='week'?'active':''}">每周周报</button>
       <button data-rep="month" class="${period==='month'?'active':''}">每月月报</button>
-      <button class="btn btn-primary" id="rep-pdf" style="margin-left:auto">导出 PDF</button>
+      <button data-rep="year" class="${period==='year'?'active':''}">年度总结</button>
+      ${AI_ENABLED?'<button class="btn" id="rep-ai" style="margin-left:auto">✨ AI 生成复盘</button>':''}
+      <button class="btn btn-primary" id="rep-pdf"${AI_ENABLED?'':' style="margin-left:auto"'}>导出 PDF</button>
     </div>`;
     html += `<div id="rep-body">
       <div class="rep-meta">${labels[period]} · 统计区间：${rng.label} · 生成于 ${todayStr()}</div>
@@ -2387,11 +2563,21 @@
       <div class="rep-sec"><h3><span class="dot"></span>会议（${periodMeetings.length}）</h3>${meetList}</div>
       <div class="rep-sec"><h3><span class="dot"></span>项目进展（${progUpdates.length}）</h3>${progList}</div>
       <div class="rep-sec"><h3><span class="dot"></span>突发事项（${flashList.length}）</h3>${listHtml(flashList, x=>`<li>${esc(x.title)}${x.tags?(' · '+esc(x.tags)):''}${x.regTime?(' ｜ 登记 '+esc(x.regTime)):''}</li>`)}</div>
-      <div class="rep-sec"><h3><span class="dot"></span>一句话复盘</h3><div class="rep-narr">${esc(narr)}</div></div>
+      ${AI_ENABLED?(`<div class="rep-sec ai-sec"><h3><span class="dot"></span>AI 智能复盘${aiRec?('<span class="ai-meta">'+esc(aiRec.model||"")+' · '+esc(aiRec.at||"")+'</span>'):''}</h3>
+        <div class="ai-out ${aiRec?'':'ai-empty'}">${aiRec?mdLite(aiRec.text):(aiReady()? '点上方「✨ AI 生成复盘」，让模型基于上面的完成事项、会议、项目进展生成一份有观点的复盘。' : '尚未配置模型：去「设置 → AI 复盘」填一次 API Key（只存在本机浏览器，不随云同步）。')}</div>
+        ${aiRec?`<div class="ai-acts no-print"><button class="btn btn-ghost" id="ai-regen">重新生成</button><button class="btn btn-ghost" id="ai-del">清除</button></div>`:''}
+      </div>`):''}
+      <div class="rep-sec"><h3><span class="dot"></span>一句话复盘（离线模板）</h3><div class="rep-narr">${esc(narr)}</div></div>
     </div>`;
     document.getElementById("view-summary").innerHTML = html;
     document.querySelectorAll("#view-summary .seg button[data-rep]").forEach(b=>b.onclick=()=>{ repPeriod=b.getAttribute("data-rep"); renderSummary(); });
     const pdf=document.getElementById("rep-pdf"); if(pdf) pdf.onclick=()=>{ window.print(); };
+    const ab=document.getElementById("rep-ai"); if(ab) ab.onclick=()=>generateAiReview(period);
+    const arg=document.getElementById("ai-regen"); if(arg) arg.onclick=()=>generateAiReview(period);
+    const adl=document.getElementById("ai-del"); if(adl) adl.onclick=()=>{
+      const r=aiReviewGet(period, f.rng); if(!r) return;
+      state.aiReviews=(state.aiReviews||[]).filter(x=>x.key!==r.key); save(); renderSummary(); toast("已清除本期 AI 复盘");
+    };
   }
 
   /* ---------- 设置 ---------- */
@@ -2447,6 +2633,29 @@
           </div>
         </div></div>
       </div>
+      ${AI_ENABLED?(`<div class="acc" data-acc="ai">
+        <div class="acc-head" data-acc-toggle><span class="acc-t">AI 复盘</span><span class="acc-sub">接入大模型 · ${aiReady()?("已配置 "+esc(aiCfg().model)):"未配置"}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+        <div class="acc-body"><div class="acc-body-inner">
+          <div class="setting-row" style="margin-bottom:0">
+            <span class="hint">填一次 API Key，「AI 复盘」就能基于你的<b>完成事项、会议、项目进展、备忘</b>生成真正有观点的复盘（不再是模板套话）。请求由你的浏览器<b>直接发给模型厂商</b>，不经过任何中间服务器。<b>默认不随云同步</b>，换设备需各填一次。</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <select id="set-ai-prov" style="width:auto;min-width:180px">
+                ${Object.keys(AI_PROVIDERS).map(k=>'<option value="'+k+'"'+(state.settings.ai.provider===k?" selected":"")+'>'+AI_PROVIDERS[k].n+'</option>').join("")}
+              </select>
+              <input id="set-ai-model" class="code" style="flex:1;min-width:160px" placeholder="模型名" value="${esc(state.settings.ai.model||'')}" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false">
+            </div>
+            <input id="set-ai-url" class="code" placeholder="接口地址（OpenAI 兼容 /chat/completions）" value="${esc(state.settings.ai.baseUrl||'')}" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false">
+            <input id="set-ai-key" class="code" type="password" placeholder="API Key" value="${esc(state.settings.ai.key||'')}" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false">
+            <span class="hint" id="ai-prov-tip">${esc((AI_PROVIDERS[state.settings.ai.provider]||AI_PROVIDERS.deepseek).tip)}</span>
+            <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer"><input type="checkbox" id="set-ai-synckey" style="width:auto"${state.settings.ai.syncKey?" checked":""}> 让 API Key 随云端同步（方便手机直接用，但 Key 会明文存进你的私有 Gist）</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button class="btn btn-primary" id="set-ai-save">保存</button>
+              <button class="btn" id="set-ai-test">测试连接</button>
+              <span class="hint" id="aiStatus"></span>
+            </div>
+          </div>
+        </div></div>
+      </div>`):''}
       <div class="acc" data-acc="help">
         <div class="acc-head" data-acc-toggle><span class="acc-t">配置帮助</span><span class="acc-sub">图文步骤 + Token 诊断</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
         <div class="acc-body"><div class="acc-body-inner">
@@ -2496,6 +2705,31 @@
     const wx=document.getElementById("set-wx-save");
     if(wx) wx.onclick=()=>{ state.settings.wxWebhook=document.getElementById("set-wx").value.trim(); state.settings.wxChannel=document.getElementById("set-wx-ch").value; save(); renderAll(); toast("已保存（"+channelName(state.settings.wxChannel)+"）"); };
     const ndiag=document.getElementById("set-notif-diag"); if(ndiag) ndiag.onclick=runNotifDiag;
+    /* AI 复盘配置 */
+    const aiProv=document.getElementById("set-ai-prov");
+    if(aiProv) aiProv.onchange=()=>{
+      const p=AI_PROVIDERS[aiProv.value]||AI_PROVIDERS.deepseek;
+      state.settings.ai=Object.assign({}, state.settings.ai, {provider:aiProv.value, baseUrl:p.url, model:p.model});
+      const u=document.getElementById("set-ai-url"), mo=document.getElementById("set-ai-model"), tp=document.getElementById("ai-prov-tip");
+      if(u) u.value=p.url; if(mo) mo.value=p.model; if(tp) tp.textContent=p.tip;
+      save();
+    };
+    const aiSave=document.getElementById("set-ai-save");
+    if(aiSave) aiSave.onclick=()=>{
+      const g=id=>{ const e=document.getElementById(id); return e? e.value.trim():""; };
+      state.settings.ai={
+        provider: g("set-ai-prov")||"deepseek",
+        baseUrl: g("set-ai-url"), model: g("set-ai-model"), key: g("set-ai-key"),
+        syncKey: (document.getElementById("set-ai-synckey")||{}).checked===true
+      };
+      save(); renderSettings(); toast(aiReady()? "已保存，去「AI 复盘」点生成试试" : "已保存，但还缺接口地址 / 模型名 / Key");
+    };
+    const aiTestBtn=document.getElementById("set-ai-test");
+    if(aiTestBtn) aiTestBtn.onclick=()=>{
+      const g=id=>{ const e=document.getElementById(id); return e? e.value.trim():""; };
+      state.settings.ai=Object.assign({}, state.settings.ai, {provider:g("set-ai-prov")||"deepseek", baseUrl:g("set-ai-url"), model:g("set-ai-model"), key:g("set-ai-key")});
+      save(); aiTest();
+    };
     const wxch=document.getElementById("set-wx-ch");
     if(wxch) wxch.onchange=()=>{
       const ch=wxch.value; const inp=document.getElementById("set-wx"); const hint=document.getElementById("wx-hint");
@@ -2777,6 +3011,8 @@
   function syncPayload(){
     const copy=JSON.parse(JSON.stringify(state));
     if(copy.settings && copy.settings.sync){ delete copy.settings.sync.token; delete copy.settings.sync.gistId; }
+    /* AI Key 默认不上传云端（用户未勾选「随云端同步」时剔除） */
+    if(copy.settings && copy.settings.ai && !copy.settings.ai.syncKey) delete copy.settings.ai.key;
     return JSON.stringify(copy);
   }
   function setSyncStatus(txt, kind){
@@ -2935,7 +3171,8 @@
     if(!f || !f.content) return;
     let remote; try{ remote=JSON.parse(f.content); }catch(e){ return; }
     const localSync=state.settings.sync;
-    const ARRAYS=['tasks','meetings','memos','ideas','projects','routines','misc'];
+    const localAI=state.settings.ai ? Object.assign({}, state.settings.ai) : null;
+    const ARRAYS=['tasks','meetings','memos','ideas','projects','routines','misc','aiReviews'];
     // 合并双方墓碑（取较大时间戳），并传给合并器：已删除且无后续编辑的条目不再复活
     const lt=tombMap();
     const rt=(remote.meta && remote.meta.tombstones && typeof remote.meta.tombstones==="object") ? remote.meta.tombstones : {};
@@ -2956,6 +3193,17 @@
     });
     if(!state.settings) state.settings={wxWebhook:"",wxChannel:"wx"};
     state.settings.sync=Object.assign({}, state.settings.sync, localSync);
+    /* AI 配置：本机非空值优先（Key 未勾选同步时，云端没有 Key，不能把本机的冲掉） */
+    if(remote.settings && remote.settings.ai){
+      const r=remote.settings.ai, l=localAI||{};
+      state.settings.ai={
+        provider: l.provider || r.provider || "deepseek",
+        baseUrl: l.baseUrl || r.baseUrl || "",
+        model: l.model || r.model || "",
+        key: l.key || r.key || "",
+        syncKey: (l.syncKey!==undefined) ? !!l.syncKey : !!r.syncKey
+      };
+    }
     if(remote.settings && remote.settings.wxWebhook!==undefined && !state.settings.wxWebhook) state.settings.wxWebhook=remote.settings.wxWebhook;
     state.meta = state.meta || {updatedAt:Date.now()};
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
@@ -3085,6 +3333,11 @@
     b.onclick=()=>setView(b.getAttribute("data-view"));
   });
   buildMoreSheet();
+  /* AI 未开启时：复盘入口改叫「工作复盘」，避免出现点了用不了的功能名 */
+  if(!AI_ENABLED){
+    if(viewMeta.summary) viewMeta.summary.t="工作复盘";
+    document.querySelectorAll('[data-view="summary"]').forEach(b=>{ b.innerHTML=b.innerHTML.replace("AI 复盘","工作复盘"); });
+  }
   document.getElementById("btnSync").onclick=syncNow;
   document.getElementById("btnExport").onclick=exportJSON;
   document.getElementById("btnImport").onclick=()=>document.getElementById("fileInput").click();
