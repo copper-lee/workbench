@@ -562,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.10.33"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.15.34"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1182,7 +1182,7 @@
     }else{
       html += `<div class="ov-meet">`+upcoming.map(x=>{
         const isToday = x.date===t;
-        return `<div class="ov-meet-item ${isToday?'ov-today':''}"><div class="ov-dot"></div><div style="flex:1"><div style="font-weight:600">${esc(x.title)}</div><div class="ov-time">${isToday?'今天':esc(x.date)} ${esc(x.time||'')} · ${esc(x.location||'未设置')}</div></div></div>`;
+        return `<div class="ov-meet-item ${isToday?'ov-today':''}"><div class="ov-dot"></div><div style="flex:1"><div style="font-weight:600">${esc(x.title)}</div><div class="ov-time">${isToday?'今天':esc(x.date)} ${esc(x.time||'')}${x.location?(' · '+esc(x.location)):''}</div></div></div>`;
       }).join("")+`</div>`;
     }
     html += `<button class="ov-more" data-go="calendar">查看日历 →</button>`;
@@ -1947,12 +1947,12 @@
       const wxOn = !!state.settings.wxWebhook;
       const remStatus = wxOn ? '<span class="tag p2">会前一天/1小时/10分钟提醒</span>' : '<span class="tag p1">未配置群机器人，不提醒</span>';
       const remindLine = (x.date&&x.time) ? ('时间：'+esc(x.date)+' '+esc(x.time)+'　'+remStatus) : ('时间：未设置　'+remStatus);
-      const locLine = x.location ? ('地点：'+esc(x.location)) : '地点：未设置';
+      const locLine = x.location ? ('地点：'+esc(x.location)) : '';   // 未设地点就不显示这一行
       html += `<div class="card"><div class="item-row">
         <div class="item-main">
           <div class="item-title">${esc(x.title)}</div>
           <div class="item-sub">${remindLine}</div>
-          <div class="item-sub">${locLine}</div>
+          ${locLine?`<div class="item-sub">${locLine}</div>`:''}
           ${x.note?`<div class="item-sub">备注：${esc(x.note)}</div>`:''}
         </div>
         <div class="item-actions">
