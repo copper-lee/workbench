@@ -562,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.15.34"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.15.36"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1290,7 +1290,7 @@
                 <input id="rt-yed" type="number" min="1" max="31" value="28" style="width:46px"><span>日</span>
               </div>
             </div>
-            <div class="field" style="grid-column:1/-1"><label>备注（可选，不进入任务标题）</label><input id="rt-note" placeholder="如：需在季度末前完成"></div>
+            <div class="field" style="grid-column:1/-1"><label>备注</label><input id="rt-note" placeholder="补充说明"></div>
           </div>
           <div class="edit-actions"><button class="btn" id="rt-cancel">取消</button><button class="btn btn-primary" id="rt-save">保存</button></div>
         </div>
@@ -1822,12 +1822,12 @@
     if(editing[x.id]){
       return `<div class="card"><div class="edit-box">
         <input id="e-title" value="${esc(x.title)}">
-        <label class="ck-line"><input type="checkbox" id="e-flash"${x.flash?' checked':''}> 突发事项（只填事项+标签）</label>
+        <label class="ck-line"><input type="checkbox" id="e-flash"${x.flash?' checked':''}> 突发事项</label>
         <div class="form-grid" id="e-due-field"><input id="e-due" type="date" value="${esc(x.due||'')}"></div>
-        <label class="ck-line" id="e-remind-field"><input type="checkbox" id="e-remind"${x.remind?' checked':''}> 仅到期日提醒</label>
-        <div class="form-grid" id="e-start-field-edit"><input id="e-start" type="date" value="${esc(x.start||'')}" placeholder="开始日期（默认创建日）"></div>
+        <label class="ck-line" id="e-remind-field"><input type="checkbox" id="e-remind"${x.remind?' checked':''}> 单次提醒</label>
+        <div class="form-grid" id="e-start-field-edit"><input id="e-start" type="date" value="${esc(x.start||'')}" placeholder="开始日期"></div>
         <div id="e-note-field"><input id="e-note" value="${esc(x.note||'')}" placeholder="备注"></div>
-        <input id="e-tags" value="${esc(x.tags||'')}" placeholder="标签（逗号分隔，如：寄售,库存）">
+        <input id="e-tags" value="${esc(x.tags||'')}" placeholder="标签（逗号分隔）">
         <div class="edit-actions"><button class="btn" data-cancel="${x.id}">取消</button><button class="btn btn-primary" data-save="tasks:${x.id}">保存</button></div>
       </div></div>`;
     }
@@ -1851,15 +1851,15 @@
     html += `<div class="card">
       <div class="form-grid">
         <div class="field"><label>事项</label><input id="tt-title" placeholder="要做什么？"></div>
-        <div class="field"><label>标签（可选，逗号分隔）</label><input id="tt-tags" placeholder="如：寄售,库存,回款"></div>
+        <div class="field"><label>标签</label><input id="tt-tags" placeholder="如：寄售,库存,回款"></div>
       </div>
-      <label class="ck-line"><input type="checkbox" id="tt-flash"> 突发事项（只填事项+标签，自动记录登记时间）</label>
-      <label class="ck-line" id="tt-remind-field"><input type="checkbox" id="tt-remind"> 仅到期日提醒（不勾则从开始日每天显示，直到完成）</label>
+      <label class="ck-line"><input type="checkbox" id="tt-flash"> 突发事项</label>
+      <label class="ck-line" id="tt-remind-field"><input type="checkbox" id="tt-remind"> 单次提醒</label>
       <div class="form-grid" id="tt-dates-grid" style="margin:8px 0 10px">
-        <div class="field" id="tt-start-field"><label>开始日期（可选，默认今天）</label><input id="tt-start" type="date" value="${todayStr()}"></div>
+        <div class="field" id="tt-start-field"><label>开始日期</label><input id="tt-start" type="date" value="${todayStr()}"></div>
         <div class="field" id="tt-due-field"><label>到期日</label><input id="tt-due" type="date"></div>
       </div>
-      <div class="field" id="tt-note-field" style="margin-bottom:10px"><label>备注（可选）</label><input id="tt-note" placeholder="补充说明"></div>
+      <div class="field" id="tt-note-field" style="margin-bottom:10px"><label>备注</label><input id="tt-note" placeholder="补充说明"></div>
       <button class="btn btn-primary" id="tt-add">+ 添加工作</button>
     </div>`;
     html += `<div id="task-list"></div>`;
@@ -1923,12 +1923,12 @@
     html += `<div class="card">
       <div class="form-grid">
         <div class="field"><label>会议主题</label><input id="m-title" placeholder="如：Q3 复盘会"></div>
-        <div class="field"><label>备注（可选）</label><input id="m-note" placeholder="会议说明、议程要点等"></div>
+        <div class="field"><label>备注</label><input id="m-note" placeholder="补充说明"></div>
       </div>
       <div class="form-grid">
         <div class="field"><label>日期</label><input id="m-date" type="date" value="${todayStr()}"></div>
         <div class="field"><label>时间</label><input id="m-time" type="time" value="09:00"></div>
-        <div class="field"><label>地点（可选）</label><select id="m-loc">${locOptions("")}</select></div>
+        <div class="field"><label>地点</label><select id="m-loc">${locOptions("")}</select></div>
       </div>
       <button class="btn btn-primary" id="m-add" style="margin-top:10px">+ 添加会议</button>
     </div>`;
@@ -2055,7 +2055,7 @@
         </div>
         <div class="form-grid">
           <div class="field"><label>密码</label><input id="mm-password" type="password" placeholder="登录密码" autocomplete="new-password"></div>
-          <div class="field"><label>备注（可选）</label><input id="mm-note" placeholder="网址、密保问题等"></div>
+          <div class="field"><label>备注</label><input id="mm-note" placeholder="补充说明"></div>
         </div>
         <button class="btn btn-primary" id="mm-add">+ 添加到 ERP</button>
       </div>`;
@@ -2100,7 +2100,7 @@
             <input id="e-title" value="${esc(x.title)}" placeholder="名称">
             <input id="e-account" value="${esc(x.account||'')}" placeholder="账号" autocomplete="off">
             <input id="e-password" value="${esc(x.password||'')}" placeholder="密码" autocomplete="new-password">
-            <input id="e-note" value="${esc(x.note||'')}" placeholder="备注（可选）">
+            <input id="e-note" value="${esc(x.note||'')}" placeholder="备注">
             <div class="edit-actions"><button class="btn" data-cancel="${x.id}">取消</button><button class="btn btn-primary" data-save="memos:${x.id}">保存</button></div>
           </div></div>`;
           return;
@@ -2178,8 +2178,8 @@
     let html = `<div class="view-head"><span class="sub">${viewMeta.ideas.s}</span></div>`;
     html += `<div class="card">
       <div class="form-grid">
-        <div class="field" style="grid-column:1/-1"><label>灵感内容</label><textarea id="i-content" placeholder="捕捉一个好点子…（支持多行，右下角可拖动调整高度）"></textarea></div>
-        <div class="field"><label>标签（可选）</label><input id="i-tag" placeholder="如：效率 / 产品 / 客户"></div>
+        <div class="field" style="grid-column:1/-1"><label>灵感内容</label><textarea id="i-content" placeholder="捕捉一个好点子…"></textarea></div>
+        <div class="field"><label>标签</label><input id="i-tag" placeholder="如：效率 / 产品 / 客户"></div>
       </div>
       <button class="btn btn-primary" id="i-add">+ 收入灵感库</button>
     </div>`;
@@ -2269,9 +2269,9 @@
     html += `<div class="card">
       <div class="form-grid">
         <div class="field" style="grid-column:1/-1"><label>项目名称</label><input id="pj-title" placeholder="如：医院寄售系统对接"></div>
-        <div class="field"><label>项目日期（可选）</label><input id="pj-date" type="date"></div>
+        <div class="field"><label>项目日期</label><input id="pj-date" type="date"></div>
       </div>
-      <div class="field" style="margin-bottom:10px"><label>项目说明（可选）</label><input id="pj-note" placeholder="目标 / 范围 / 关键节点"></div>
+      <div class="field" style="margin-bottom:10px"><label>项目说明</label><input id="pj-note" placeholder="目标 / 范围 / 关键节点"></div>
       <button class="btn btn-primary" id="pj-add">+ 新增项目</button>
     </div>`;
     html += `<div id="project-list"></div>`;
@@ -3363,6 +3363,35 @@
 
   /* ---------- 启动 ---------- */
   renderAll();
+
+  /* ---------- 关闭浏览器输入历史自动填充 ----------
+     症状：点击文本框会弹出"以前填过的内容"下拉（如历次会议主题），遮挡界面且与工作台无关。
+     做法：给所有文本类输入框加上关闭自动填充的属性，并用 MutationObserver 覆盖后续动态渲染的表单。
+     注意不要动 checkbox / date / time / number / select：它们没有历史下拉，加了属性反而可能影响原生控件。 */
+  function killAutofill(root){
+    if(!root || !root.querySelectorAll) return;
+    root.querySelectorAll('input, textarea').forEach(el=>{
+      const t = (el.getAttribute('type')||'text').toLowerCase();
+      if(t==='checkbox'||t==='radio'||t==='date'||t==='time'||t==='number'||t==='range'||t==='color') return;
+      el.setAttribute('autocomplete','off');
+      el.setAttribute('autocorrect','off');
+      el.setAttribute('autocapitalize','off');
+      el.setAttribute('spellcheck','false');
+      // 部分浏览器忽略 autocomplete=off，改用随机 token 可强制关闭（Firefox/Chrome 均生效）
+      el.setAttribute('name','wf_'+Math.random().toString(36).slice(2,10));
+    });
+  }
+  killAutofill(document);
+  new MutationObserver(muts=>{
+    muts.forEach(m=>{
+      (m.addedNodes||[]).forEach(n=>{
+        if(n.nodeType!==1) return;
+        if(n.matches && n.matches('input, textarea')) killAutofill(n.parentNode||document);
+        else killAutofill(n);
+      });
+    });
+  }).observe(document.body, { childList:true, subtree:true });
+
   if(location.protocol==="file:") toast("当前 file:// 打开：Chrome/Edge 可直接点「立即同步」尝试；若失败请改用 http://localhost:8080/个人工作台.html");
   setView("overview");
   // 启动自愈：先合并重复规则（跨设备同步/重复创建会产生同名同参数的两条规则），再清理重复任务，最后补生成
