@@ -562,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.16.39"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.16.41"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1286,12 +1286,12 @@
             <div class="field" id="rt-day-field" style="display:none"><label>日期（日）</label>
               <input id="rt-day" type="number" min="1" max="31" value="1">
             </div>
-            <div class="field" id="rt-wkn-field" style="display:none"><label>第几周</label>
+            <div class="field" id="rt-wkn-field" style="display:none"><label>第几个</label>
               <select id="rt-wkn">
-                <option value="1" selected>第一周</option><option value="2">第二周</option><option value="3">第三周</option><option value="4">第四周</option><option value="5">最后一周</option>
+                <option value="1" selected>第一个</option><option value="2">第二个</option><option value="3">第三个</option><option value="4">第四个</option><option value="5">最后一个</option>
               </select>
             </div>
-            <div class="field" id="rt-wkd-field" style="display:none"><label>星期</label>
+            <div class="field" id="rt-wkd-field" style="display:none"><label>星期几</label>
               <select id="rt-wkd">
                 <option value="1" selected>周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="0">周日</option>
               </select>
@@ -1307,18 +1307,17 @@
               </select>
             </div>
             <div class="field" id="rt-mrs-field" style="display:none"><label>每月区间</label>
-              <div style="display:flex;align-items:center;gap:8px">
-                <input id="rt-mrs" type="number" min="1" max="31" value="1" style="width:64px">
-                <span>日 至</span>
-                <input id="rt-mre" type="number" min="1" max="31" value="31" style="width:64px">
-                <span>日</span>
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap">
+                <input id="rt-mrs" type="number" min="1" max="31" value="1" style="width:56px"><span>日</span>
+                <span style="white-space:nowrap;color:var(--muted)">至</span>
+                <input id="rt-mre" type="number" min="1" max="31" value="31" style="width:56px"><span>日</span>
               </div>
             </div>
             <div class="field" id="rt-qrange-field" style="display:none"><label>季度区间（第X月D日 – 第Y月D日）</label>
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                 <span>第</span><input id="rt-qsm" type="number" min="1" max="3" value="1" style="width:46px"><span>月</span>
                 <input id="rt-qsd" type="number" min="1" max="31" value="1" style="width:46px"><span>日</span>
-                <span>–</span>
+                <span style="white-space:nowrap;color:var(--muted);padding:0 2px">–</span>
                 <span>第</span><input id="rt-qem" type="number" min="1" max="3" value="3" style="width:46px"><span>月</span>
                 <input id="rt-qed" type="number" min="1" max="31" value="31" style="width:46px"><span>日</span>
               </div>
@@ -1327,7 +1326,7 @@
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                 <span>起始</span><input id="rt-ysm" type="number" min="1" max="12" value="11" style="width:46px"><span>月</span>
                 <input id="rt-ysd" type="number" min="1" max="31" value="1" style="width:46px"><span>日</span>
-                <span>–</span>
+                <span style="white-space:nowrap;color:var(--muted);padding:0 2px">–</span>
                 <span>截止</span><input id="rt-yem" type="number" min="1" max="12" value="2" style="width:46px"><span>月</span>
                 <input id="rt-yed" type="number" min="1" max="31" value="28" style="width:46px"><span>日</span>
               </div>
@@ -1456,8 +1455,16 @@
         default: return {period:"day", mode:"daily"};
       }
     }
+    /* 模式选项文案：用「第一个周一 / 最后一个周五」这类具体说法，
+       不用「第N周周W」这种占位符——字母要用户自己在脑子里替换，读起来别扭。 */
     function fillModeOptions(period){
-      const opts={ day:[["daily","每天"],["workday","每个工作日"]], week:[["week","指定周几"]], month:[["date","每月指定日"],["week","每月第N周周W"],["range","每月时间段"]], quarter:[["date","每季指定日"],["week","每季第N周周W"],["range","每季时间段"]], year:[["date","每年指定日"],["week","每年第N周周W"],["range","每年时间段"]] }[period]||[["daily","每天"]];
+      const opts={
+        day:    [["daily","每天"],["workday","每个工作日"]],
+        week:   [["week","指定周几"]],
+        month:  [["date","每月指定日"],["week","每月第几个周几"],["range","每月时间段"]],
+        quarter:[["date","每季指定日"],["week","每季第几个周几"],["range","每季时间段"]],
+        year:   [["date","每年指定日"],["week","每年第几个周几"],["range","每年时间段"]]
+      }[period]||[["daily","每天"]];
       rtModeSel.innerHTML=opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("");
     }
     function rtFieldsFor(period, mode){
