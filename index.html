@@ -562,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.15.36"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.16.37"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -2928,9 +2928,37 @@
     _notifRecent=_notifRecent.filter(t=>now-t<600000);
     return _notifRecent.length>=5;
   }
-  function checkReminders(){
+  /* ---------- 跨端去重：一场会一档只推一次 ----------
+     去重哨兵在 localStorage（按 origin 隔离），电脑/手机/不同入口互不知情，
+     所以「推之前先拉一次云端」：任一端已推过，本端就跳过并把自己也标记成已推。 */
+  function notifSig(x){ return (x.date||"")+"|"+(x.time||"")+"|"+(x.title||""); }
+  function notifClaimed(m,key){
+    if(m.notified && m.notified[key]) return true;
+    if(notifWasSent(m,key)) return true;
+    const sig=notifSig(m);
+    return (state.meetings||[]).some(function(x){        // 同步可能产生 id 不同但内容相同的重复条目
+      if(!x || !x.notified || !x.notified[key]) return false;
+      return (m.id && x.id===m.id) || notifSig(x)===sig;
+    });
+  }
+  function notifClaimAll(m,key){                          // 同内容的重复条目一并标记，避免换设备又推
+    const sig=notifSig(m);
+    (state.meetings||[]).forEach(function(x){
+      if(!x) return;
+      if((m.id && x.id===m.id) || notifSig(x)===sig){ x.notified=x.notified||{}; x.notified[key]=true; }
+    });
+  }
+  async function checkReminders(){
+    if(_notifBusy) return;                                // 云端拉取是异步的，避免 20s 轮询叠加
+    _notifBusy=true;
+    try{ await checkRemindersInner(); }catch(e){ console.warn("[notif]", e); }
+    finally{ _notifBusy=false; }
+  }
+  let _notifBusy=false;
+  async function checkRemindersInner(){
     if(!state.settings.wxWebhook) return;
     const now=Date.now();
+    const cand=[];   // 待推送候选：先只做本地判断，不碰网络
     state.meetings.forEach(m=>{
       if(!m.notified) m.notified={d1:false,h1:false,m10:false};
       /* 只把「真正的旧结构」迁移过来。注意 m10 属于新结构，
@@ -2943,22 +2971,37 @@
       [[1440,"d1"],[60,"h1"],[10,"m10"]].forEach(function(p){
         const off=p[0], key=p[1];
         const target=mt-off*60000;
-        if(m.notified[key] || notifWasSent(m,key)){ m.notified[key]=true; return; }
-        const guard=(m.id||m.title)+"|"+key;
-        if(_notifInflight[guard]) return;
-        if(now>=target && now<=mt+60000){
-          // 先打标记再推送：本浏览器其他标签页立刻可见，绝不重推
-          m.notified[key]=true; markNotifSent(m,key);
-          if(now-target > 30*60000){ save(); return; }   // 提醒时点已过超过 30 分钟（如当天下午才建明天的会），不再补推「前一天」
-          _notifInflight[guard]=true;
-          save();
-          if(notifThrottled()){ delete _notifInflight[guard]; console.warn("[notif] 10 分钟内已推 5 条，触发限流，本次跳过"); return; }
-          _notifRecent.push(Date.now());
-          const pr=pushMeeting(m);
-          if(pr && typeof pr.finally==="function") pr.finally(()=>{ delete _notifInflight[guard]; });
-          else setTimeout(()=>{ delete _notifInflight[guard]; }, 15000);
-        }
+        if(notifClaimed(m,key)){ m.notified[key]=true; return; }
+        if(!(now>=target && now<=mt+60000)) return;
+        if(now-target > 30*60000){ m.notified[key]=true; save(); return; }  // 提醒时点已过超过 30 分钟（如下午才建明天的会），不再补推
+        cand.push({m:m, key:key, target:target, guard:(m.id||m.title)+"|"+key});
       });
+    });
+    if(!cand.length) return;
+    /* 关键一步：推之前先拉一次云端。别的一端可能已经推过（哨兵只在本机 localStorage，跨端互不知情），
+       pullSync 内部对 notified 做「取或」合并，拉完再判断一次就能挡掉重复推送。 */
+    if(isSyncOn()){
+      try{ await pullSync(); }catch(e){ console.warn("[notif] 云端拉取失败，退化为按本机状态判断", e); }
+    }
+    const findFresh=(m)=>{
+      const byId=(m.id!==undefined&&m.id!==null&&m.id!=="") ? state.meetings.find(x=>x&&x.id===m.id) : null;
+      return byId || m;
+    };
+    cand.forEach(function(c){
+      const m=findFresh(c.m), key=c.key;
+      if(!m) return;
+      if(notifClaimed(m,key)){ notifClaimAll(m,key); save(); return; }   // 另一端已推：只补标记，不推
+      if(_notifInflight[c.guard]) return;
+      _notifInflight[c.guard]=true;
+      // 先打标记再推送：本浏览器其他标签页立刻可见，绝不重推
+      notifClaimAll(m,key); markNotifSent(m,key);
+      if(notifThrottled()){ delete _notifInflight[c.guard]; console.warn("[notif] 10 分钟内已推 5 条，触发限流，本次跳过"); return; }
+      _notifRecent.push(Date.now());
+      save();
+      flushPendingPush();      // 立刻把「已推」标记推上云端（不等 1.5s 防抖），其他端尽快看到
+      const pr=pushMeeting(m);
+      if(pr && typeof pr.finally==="function") pr.finally(()=>{ delete _notifInflight[c.guard]; });
+      else setTimeout(()=>{ delete _notifInflight[c.guard]; }, 15000);
     });
   }
   /* 提醒诊断：一眼看清「为什么推 / 推了几次 / 下次什么时候推」 */
@@ -2967,6 +3010,7 @@
     L.push("【提醒诊断】v"+APP_VERSION);
     L.push("推送渠道："+(state.settings.wxWebhook?(channelName(state.settings.wxChannel||"wx")+"（已配置）"):"未配置 → 当前不会推送任何提醒"));
     L.push("检查频率：每 20 秒一次（仅页面打开时）");
+    L.push("跨端去重："+(isSyncOn()?"已开启（推送前先拉云端，任一端推过就不再推）":"未开启云同步 → 电脑/手机/不同入口会各推一次"));
     L.push("");
     let log=[]; try{ log=JSON.parse(localStorage.getItem(NOTIF_LOG)||"[]"); }catch(e){ log=[]; }
     L.push("— 最近 10 条推送记录 —");
