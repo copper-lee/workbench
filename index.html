@@ -562,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.16.37"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.16.38"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -861,6 +861,18 @@
     if(removed>0){ save(); toast("已清理 "+removed+" 条过期/重复的例行任务"); }
     return removed;
   }
+  /* 例行工作当前状态（卡片副标题）：已完成 > 进行中 > 未开始 > 未到该做的日子。
+     以前这里只写「已生成 N 次」——点完成后仍显示"已生成"，看起来像"没做"，
+     会把「生成」误读成「待办」，所以改成说清这次做完了没。 */
+  function routineStateText(r){
+    if(!r || !r.enabled) return "已停用";
+    const occ = routineOccurrence(r, todayStr());
+    if(!occ) return "已生成 "+state.tasks.filter(x=>x.routineId===r.id).length+" 次";
+    const mine = state.tasks.filter(x=> x.routineId===r.id && !x.archived && x.routineOccKey===occ.key);
+    if(mine.some(x=>x.status==="done")) return "本次已完成";
+    if(mine.length) return occ.start===occ.due ? "本次待完成" : "本次进行中";
+    return "已生成 "+state.tasks.filter(x=>x.routineId===r.id).length+" 次";
+  }
   function generateRoutines(targetDate, silent){
     const t = targetDate || todayStr();
     let n=0;
@@ -1090,7 +1102,7 @@
     return s <= t;
   }
   function taskMeta(x, t){
-    if(!x.due) return {cls:"", text:x.flash?"突发 · 未设期限":"未设期限"};
+    if(!x.due) return {cls:"", text:""};            // 未设到期日：副标题留空（由调用方决定是否整行省略）
     if(x.due < t) return {cls:"over", text:"逾期 "+x.due};
     if(x.due === t) return {cls:"", text:"今天到期 "+x.due};
     if(x.remind) return {cls:"", text:"到期 "+x.due};
@@ -1117,10 +1129,11 @@
     let items="";
     list.forEach(x=>{
       const m = taskMeta(x, t);
+      const meta = m.text + (cleanNote(x.note)?((m.text?' · ':'')+cleanNote(x.note)):'');   // 无日期、无备注 → 整行不渲染
       items += `<div class="db-item${m.cls?' over':''}">
         <div class="ck" data-done="${x.id}"></div>
         <div class="db-title">${esc(x.title)}</div>
-        <div class="db-meta">${esc(m.text)}${cleanNote(x.note)?(' · '+esc(cleanNote(x.note))):''}</div>
+        ${meta?`<div class="db-meta">${m.text?esc(m.text):''}${m.text&&cleanNote(x.note)?' · ':''}${cleanNote(x.note)?esc(cleanNote(x.note)):''}</div>`:''}
       </div>`;
     });
     return `<div class="card daily-banner"><div class="db-head"><span class="db-t">今日待办（含逾期）</span><span class="db-sub">${list.length} 项待处理</span></div>${items}</div>`;
@@ -1169,7 +1182,8 @@
     }else{
       html += `<div class="ov-meet">`+todos.map(x=>{
         const m = taskMeta(x, t);
-        return `<div class="ov-meet-item${m.cls?' over':''}"><div class="ck ov-ck" data-done="${x.id}" title="点击标记完成"></div><div style="flex:1"><div style="font-weight:600${m.cls?';color:var(--danger)':''}">${esc(x.title)}</div><div class="ov-time">${esc(m.text)}${cleanNote(x.note)?(' · '+esc(cleanNote(x.note))):''}</div></div></div>`;
+        const meta = m.text + (cleanNote(x.note)?((m.text?' · ':'')+cleanNote(x.note)):'');
+        return `<div class="ov-meet-item${m.cls?' over':''}"><div class="ck ov-ck" data-done="${x.id}" title="点击标记完成"></div><div style="flex:1"><div style="font-weight:600${m.cls?';color:var(--danger)':''}">${esc(x.title)}</div>${meta?`<div class="ov-time">${m.text?esc(m.text):''}${m.text&&cleanNote(x.note)?' · ':''}${cleanNote(x.note)?esc(cleanNote(x.note)):''}</div>`:''}</div></div>`;
       }).join("")+`</div>`;
     }
     html += `<button class="ov-more" data-go="tasks">查看全部工作 →</button>`;
@@ -1302,7 +1316,7 @@
         html += `<div class="rt-item">
           <div class="rt-num">${idx+1}</div>
           <div class="rt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
-          <div class="rt-main"><div class="rt-t">${esc(r.title)}</div><div class="rt-meta">${r.note?esc(r.note)+' · ':''}已生成 ${state.tasks.filter(x=>x.routineId===r.id).length} 次</div></div>
+          <div class="rt-main"><div class="rt-t">${esc(r.title)}</div><div class="rt-meta">${r.note?esc(r.note)+' · ':''}${routineStateText(r)}</div></div>
           <div class="rt-tags"><span class="rt-tag">${freqLabel(r)}</span><span class="rt-status ${r.enabled?'on':''}">${r.enabled?'已启用':'已停用'}</span></div>
           <div class="item-actions">
             <label class="switch" title="启用/停用"><input type="checkbox" data-rtenable="${r.id}"${r.enabled?' checked':''}><span class="slider"></span></label>
@@ -1806,8 +1820,8 @@
       s+=tagPills(x.tags);
       return s;
     }
-    let s='';
-    if(!x.due) s='未排期';
+    let s='';                                       // 未设到期日：不写「未排期/未设期限」，日期位置留空
+    if(!x.due){}
     else if(overdue) s='<span class="due-over">逾期 '+esc(x.due)+'</span>';
     else if(x.remind) s='到期 '+esc(x.due);
     else s=((x.start&&x.start!==x.due)?(esc(x.start)+' → '):'进行中 · 至 ')+esc(x.due);
@@ -1815,6 +1829,12 @@
     if(n) s+=' · '+esc(n);
     s+=tagPills(x.tags);
     return s;
+  }
+  /* 工作列表的副标题：没设到期日就「不显示任何日期文案」（只有备注/标签时才出现）
+     用户明确：没排期不代表拖延，不该在卡片上写「未排期」。 */
+  function taskSubTextHtml(x, overdue){
+    const s = taskSubText(x, overdue);
+    return s ? `<div class="item-sub">${s}</div>` : '';
   }
   function taskCard(x){
     const t = todayStr();
