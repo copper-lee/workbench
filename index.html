@@ -562,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.16.38"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.16.39"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -788,7 +788,20 @@
     // 已生成的判定：只要存在该次发生(key)的任务即视为已生成；仅当用户主动归档/删除(archived)时才允许重建。
     // 注意：不能把"已完成(done)"排除在外——否则区间例行任务一旦被标完成，次日 routineGenerated 会返回 false 而重新生成一条同样的，
     // 导致区间内"每天一条"的重复（这正是 2026.09.03.2 的 bug）。
-    return state.tasks.some(x=> x.routineId===r.id && x.routineOccKey===key && !x.archived);
+    // v.39：已完成的即使被归档也视为已生成（完成是终态，绝不重建）。
+    return state.tasks.some(x=> x.routineId===r.id && x.routineOccKey===key && (!x.archived || x.status==="done"));
+  }
+  /* 该次发生是否已经「完结」（已被点过完成）。
+     规格：例行工作每月按设置时间自动生成；当月点击完成即为该次发生的终态，
+     无论是否逾期，都不再为这次发生重建任务。 */
+  function occurrenceSettled(r, occ){
+    if(!r || !occ) return false;
+    return state.tasks.some(function(x){
+      if(!x || x.routineId!==r.id || x.status!=="done") return false;
+      if(x.routineOccKey && x.routineOccKey===occ.key) return true;
+      // 老数据可能没有 OccKey：落在本次发生区间内的已完成任务，同样视为本次已完结
+      return !!(x.due && occ.start && occ.due && x.due>=occ.start && x.due<=occ.due);
+    });
   }
   /* 自愈式清理例行任务（启动 / 保存例行规则时执行）：
      1) 校验：带 routineId 的任务，其到期日必须仍命中该规则的当前发生——
@@ -832,11 +845,18 @@
         t.routineOccKey=occ.key; t.start=due;
       }
     }
+    /* 去重保留策略（v.39 修正）：**已完成优先于未完成**。
+       同一发生若同时存在「已完成的」与「未完成的」副本（同步/重复生成造成），
+       旧逻辑优先保留未完成的那条 —— 结果是用户点了完成，第二天它又以未完成状态冒出来。
+       按用户明确的规格：当月点完成即为该次发生的终态，无论是否逾期，都不再重建。
+       因此只要组内有已完成的，就保留它、删掉其余未完成的副本。 */
     const dropDup = (arr)=>{
       if(arr.length<=1) return 0;
       let n=0;
-      const todo = arr.find(t=> t.status!=="done" && !t.archived);
-      const keep = todo || arr.slice().sort((a,b)=>(b.created||"").localeCompare(a.created||""))[0];
+      const byNewest = arr.slice().sort((a,b)=>(b.created||"").localeCompare(a.created||""));
+      const done = byNewest.filter(t=> t.status==="done" || (t.archived && t.status==="done"));
+      const doneKeep = done.find(t=> t.status==="done") || null;
+      const keep = doneKeep || byNewest.find(t=> t.status!=="done" && !t.archived) || byNewest[0];
       arr.forEach(t=>{ if(t!==keep){ const i=state.tasks.indexOf(t); if(i>=0){ state.tasks.splice(i,1); markTomb(t.id); n++; } } });
       return n;
     };
@@ -881,6 +901,7 @@
       const occ = routineOccurrence(r, t);
       if(!occ) return;
       if(routineGenerated(r, occ.key)) return;
+      if(occurrenceSettled(r, occ)) return;      // 本次已点过完成 → 终态，不再生成（无论是否逾期）
       // 区间型守卫：同一规则在本区间（start~due）内只要已有未归档的任务，就绝不再生成第二条
       if(RANGEF.indexOf(r.freq)>=0 &&
          state.tasks.some(x=> x.routineId===r.id && !x.archived && x.due && x.due>=occ.start && x.due<=occ.due)) return;
@@ -1085,7 +1106,14 @@
     if(t.status==="done" || t.archived){            // 已是完成态 → 恢复为未完成
       t.status="todo"; t.archived=false; t.doneAt=""; save(); renderAll(); toast("已恢复为未完成");
     }else if(t.routineId){                           // 例行任务：只标完成，不归档——
-      t.status="done"; t.doneAt=todayStr(); save(); renderAll(); toast("已完成"); // 否则 routineGenerated 视为未生成，同月内会重新生成一条
+      t.status="done"; t.doneAt=todayStr();
+      // 补全发生标记：老数据/同步副本可能没有 OccKey，补上后这次发生才算被"认领"，后续不会再重建
+      if(!t.routineOccKey){
+        const r=state.routines.find(x=>x.id===t.routineId);
+        const occ=r?routineOccurrence(r, todayStr()):null;
+        if(occ){ t.routineOccKey=occ.key; if(!t.start) t.start=occ.start; if(!t.due) t.due=occ.due; }
+      }
+      save(); renderAll(); toast("已完成"); // 否则 routineGenerated 视为未生成，同月内会重新生成一条
     }else{                                           // 未完成 → 标记完成并归档
       t.status="done"; t.archived=true; t.doneAt=todayStr(); save(); renderAll(); toast("已归档完成");
     }
