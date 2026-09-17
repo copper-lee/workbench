@@ -562,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.16.41"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.17.43"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -600,10 +600,14 @@
     if(f==="yearlyRange"){ const s=(r.yStartM||1),sd=(r.yStartD||1),e=(r.yEndM||12),ed=(r.yEndD||31); return "每年"+s+"月"+sd+"日–"+e+"月"+ed+"日"; }
     return "每天";
   }
+  /* 当月天数 / 按月份夹取日期（v.42）：表单允许填 1~31，用户在短月里选 31 的实际语义是「当月最后一天」。
+     以前 9 月 + rangeEnd=31 会算出 "2026-09-31" 这种不存在的日期，导致任务当天生成、当天被去重判定为过期残留删掉。 */
+  function daysInMonth(year, month){ return new Date(year, month+1, 0).getDate(); }
+  function clampDay(year, month, day){ const n=daysInMonth(year,month); if(day>n) return n; return day<1?1:day; }
   function nthWeekdayOfMonth(year, month, weekday, nth){
     /* nth: 1-4 或 5(最后一周) */
     const first = new Date(year, month, 1);
-    const lastDay = new Date(year, month+1, 0).getDate();
+    const lastDay = daysInMonth(year, month);
     const firstDow = first.getDay();
     let firstOccur = 1 + ((weekday - firstDow + 7) % 7);
     if(nth===5){
@@ -626,14 +630,15 @@
     if(f==="daily") return true;
     if(f==="workday") return dow>=1 && dow<=5;
     if(f==="weekly") return dow===(r.freqDetail||0);
-    if(f==="monthlyDate") return date===(r.freqDetail||1);
+    // 单日/月末：v.42 起按当月天数夹取 —— 用户把 29/30/31 设在短月时，语义为「当月最后一天」
+    if(f==="monthlyDate") return date===clampDay(y,m,r.freqDetail||1);
     if(f==="monthlyWeek") return date===nthWeekdayOfMonth(y,m,(r.freqWeekDay==null?1:r.freqWeekDay),r.freqWeekNum||1);
     if(f==="monthlyRange"){
-      const s=r.rangeStart||1, e=r.rangeEnd||31;
+      const s=clampDay(y,m,r.rangeStart||1), e=clampDay(y,m,r.rangeEnd||31);
       return (s<=e) ? (date>=s && date<=e) : (date>=s || date<=e);
     }
     if(f==="quarterlyDate"){
-      const mq=(m%3)+1; return mq===(r.qMonth||1) && date===(r.qDay||1);
+      const mq=(m%3)+1; return mq===(r.qMonth||1) && date===clampDay(y,m,r.qDay||1);
     }
     if(f==="quarterlyWeek"){
       const mq=(m%3)+1;
@@ -645,12 +650,12 @@
       if(sm<=em){
         if(mq<sm||mq>em) return false;
         if(mq===sm && date<sd) return false;
-        if(mq===em && date>ed) return false;
+        if(mq===em && date>clampDay(y,m,ed)) return false;   // 短月：31 号夹取到当月最后一天
         return true;
       }
-      return (mq===sm && date>=sd) || (mq===em && date<=ed);
+      return (mq===sm && date>=sd) || (mq===em && date<=clampDay(y,m,ed));
     }
-    if(f==="yearlyDate") return m===(r.yMonth||1)-1 && date===(r.yDay||1);
+    if(f==="yearlyDate") return m===(r.yMonth||1)-1 && date===clampDay(y,m,r.yDay||1);
     if(f==="yearlyWeek"){
       if(m!==(r.yMonth||1)-1) return false;
       return date===nthWeekdayOfMonth(y,m,(r.yWeekDay==null?1:r.yWeekDay),r.yWeekNum||1);
@@ -660,10 +665,10 @@
       if(sm<=em){
         if(m<sm||m>em) return false;
         if(m===sm && date<sd) return false;
-        if(m===em && date>ed) return false;
+        if(m===em && date>clampDay(y,m,ed)) return false;
         return true;
       }
-      return (m===sm && date>=sd) || (m===em && date<=ed);
+      return (m===sm && date>=sd) || (m===em && date<=clampDay(y,m,ed));
     }
     return false;
   }
@@ -681,10 +686,10 @@
       const s=r.rangeStart||1, e=r.rangeEnd||31;
       let refY=y, refM=m;
       if(s>e && date<=e){ refM=m-1; if(refM<0){ refM=11; refY=y-1; } } // 落在"止月"时，锚回起始月
-      const startStr = ymd(refY, refM, s);
+      const startStr = ymd(refY, refM, clampDay(refY, refM, s));
       let ny=refY, nm=refM;
       if(s>e){ nm=refM+1; if(nm>11){ nm=0; ny=refY+1; } }
-      return { key:r.id+"_"+startStr, start:startStr, due:ymd(ny,nm,e) };
+      return { key:r.id+"_"+startStr, start:startStr, due:ymd(ny,nm,clampDay(ny,nm,e)) };
     }
     if(r.freq==="quarterlyRange"){
       const qi=Math.floor(m/3), mq=(m%3)+1;
@@ -693,16 +698,16 @@
       const baseM = anchorQi*3;
       const st=shiftMonths(y, baseM, sm-1);
       const en = (sm<=em) ? shiftMonths(y, baseM, em-1) : shiftMonths(y, baseM, em-1+3);
-      const startStr = ymd(st.y, st.m, sd);
-      return { key:r.id+"_"+startStr, start:startStr, due:ymd(en.y, en.m, ed) };
+      const startStr = ymd(st.y, st.m, clampDay(st.y, st.m, sd));
+      return { key:r.id+"_"+startStr, start:startStr, due:ymd(en.y, en.m, clampDay(en.y, en.m, ed)) };
     }
     if(r.freq==="yearlyRange"){
       const sm=(r.yStartM||1)-1, sd=r.yStartD||1, em=(r.yEndM||12)-1, ed=r.yEndD||31;
       const anchorY = (sm>em && m<sm) ? y-1 : y;  // 跨年：命中"止月"(次年早月)时锚回起始年
       const st=shiftMonths(anchorY, 0, sm);
       const en = (sm<=em) ? shiftMonths(anchorY, 0, em) : shiftMonths(anchorY, 0, em+12);
-      const startStr = ymd(st.y, st.m, sd);
-      return { key:r.id+"_"+startStr, start:startStr, due:ymd(en.y, en.m, ed) };
+      const startStr = ymd(st.y, st.m, clampDay(st.y, st.m, sd));
+      return { key:r.id+"_"+startStr, start:startStr, due:ymd(en.y, en.m, clampDay(en.y, en.m, ed)) };
     }
     // —— 单日型 ——
     if(!routineMatchDate(r, dstr)) return null;
@@ -714,9 +719,9 @@
     const y=d.getFullYear(), m=d.getMonth();
     if(r.freq==="monthlyRange"){
       const s=r.rangeStart||1, e=r.rangeEnd||31;
-      const start=ymd(y,m,s);
+      const start=ymd(y,m,clampDay(y,m,s));
       let ny=y, nm=m; if(s>e){ nm=m+1; if(nm>11){ nm=0; ny=y+1; } }
-      return { key:r.id+"_"+start, start, due:ymd(ny,nm,e) };
+      return { key:r.id+"_"+start, start, due:ymd(ny,nm,clampDay(ny,nm,e)) };
     }
     if(r.freq==="quarterlyRange"){
       const qi=Math.floor(m/3), mq=(m%3)+1;
@@ -724,16 +729,16 @@
       const baseM = anchorQi*3;
       const st=shiftMonths(y, baseM, (r.qStartM||1)-1);
       const en = (r.qStartM||1)<=(r.qEndM||3) ? shiftMonths(y, baseM, (r.qEndM||3)-1) : shiftMonths(y, baseM, (r.qEndM||3)-1+3);
-      const start=ymd(st.y, st.m, r.qStartD||1);
-      return { key:r.id+"_"+start, start, due:ymd(en.y, en.m, r.qEndD||31) };
+      const start=ymd(st.y, st.m, clampDay(st.y, st.m, r.qStartD||1));
+      return { key:r.id+"_"+start, start, due:ymd(en.y, en.m, clampDay(en.y, en.m, r.qEndD||31)) };
     }
     if(r.freq==="yearlyRange"){
       const sm=(r.yStartM||1)-1, em=(r.yEndM||12)-1;
       const anchorY = (sm>em && m<sm) ? y-1 : y;
       const st=shiftMonths(anchorY, 0, sm);
       const en = sm<=em ? shiftMonths(anchorY, 0, em) : shiftMonths(anchorY, 0, em+12);
-      const start=ymd(st.y, st.m, r.yStartD||1);
-      return { key:r.id+"_"+start, start, due:ymd(en.y, en.m, r.yEndD||31) };
+      const start=ymd(st.y, st.m, clampDay(st.y, st.m, r.yStartD||1));
+      return { key:r.id+"_"+start, start, due:ymd(en.y, en.m, clampDay(en.y, en.m, r.yEndD||31)) };
     }
     return null;
   }
@@ -791,16 +796,54 @@
     // v.39：已完成的即使被归档也视为已生成（完成是终态，绝不重建）。
     return state.tasks.some(x=> x.routineId===r.id && x.routineOccKey===key && (!x.archived || x.status==="done"));
   }
+  /* 任务的时间跨度：优先用 start~due，缺一端时用另一端补齐。 */
+  function routineTaskSpan(x){
+    if(!x) return null;
+    const s = x.start || x.due;
+    const e = x.due || x.start;
+    return (s && e && s<=e) ? {s:s, e:e} : null;
+  }
+  /* 任务的跨度与「某次发生」是否相交。
+     v.42 修正：原来判定的是「任务到期日必须落在该发生的窗口内」——单日型的发生（如每月 5 日）
+     窗口只有一天，而区间型任务（如每月 1~15 日）的到期日是 15 号，永远落不进 [5,5]，
+     于是跨规则重复生成的守卫形同虚设。改为区间相交，任一端有重叠即视为「同一次做事」。 */
+  function occOverlap(occ, x){
+    if(!occ || !occ.start || !occ.due || !x) return false;
+    const sp = routineTaskSpan(x);
+    if(!sp) return false;
+    return sp.s <= occ.due && sp.e >= occ.start;
+  }
   /* 该次发生是否已经「完结」（已被点过完成）。
      规格：例行工作每月按设置时间自动生成；当月点击完成即为该次发生的终态，
      无论是否逾期，都不再为这次发生重建任务。 */
   function occurrenceSettled(r, occ){
     if(!r || !occ) return false;
+    const title=String(r.title||"").trim();
+    const hit=(x)=> occOverlap(occ, x);
     return state.tasks.some(function(x){
-      if(!x || x.routineId!==r.id || x.status!=="done") return false;
-      if(x.routineOccKey && x.routineOccKey===occ.key) return true;
-      // 老数据可能没有 OccKey：落在本次发生区间内的已完成任务，同样视为本次已完结
-      return !!(x.due && occ.start && occ.due && x.due>=occ.start && x.due<=occ.due);
+      if(!x || x.status!=="done") return false;
+      if(x.routineId===r.id){
+        if(x.routineOccKey && x.routineOccKey===occ.key) return true;
+        if(hit(x)) return true;                     // 老数据可能没有 OccKey：按区间判定
+      }
+      /* 跨规则兜底（v.42）：存在「同名」例行规则但 id 不同（同步/重复创建造成，routineSig 又不完全一致时合并不掉），
+         每条规则会各自生成一条。按用户规格「同月同名做一次就算完成」，这里放宽到按标题匹配同一区间的已完成任务。 */
+      if(title && String(x.title||"").trim()===title && hit(x) && (x.routineId || String(x.id||"").indexOf("rt_")===0)) return true;
+      return false;
+    });
+  }
+  /* 跨规则重复生成守卫：本次发生窗口内若已存在「同名的例行任务」（未完成也算），就不再生成第二条。
+     只针对例行体系内的任务（带 routineId 或 rt_ 前缀），手工任务不参与，避免误挡。 */
+  function occurrenceHasSibling(r, occ){
+    if(!r || !occ) return false;
+    const title=String(r.title||"").trim();
+    if(!title) return false;
+    return state.tasks.some(function(x){
+      if(!x || x.routineId===r.id) return false;
+      const routineish = !!x.routineId || (typeof x.id==="string" && x.id.indexOf("rt_")===0);
+      if(!routineish) return false;
+      if(String(x.title||"").trim()!==title) return false;
+      return occOverlap(occ, x);
     });
   }
   /* 自愈式清理例行任务（启动 / 保存例行规则时执行）：
@@ -878,6 +921,18 @@
       (byRange[k]=byRange[k]||[]).push(t);
     });
     Object.keys(byRange).forEach(k=>{ removed += dropDup(byRange[k]); });
+    /* 三级去重（v.42）：跨规则的同名重复。两条规则 id 不同、routineSig 也不完全一致时，
+       mergeDuplicateRoutines 合并不掉，于是各自生成一条同名任务 —— 用户点完成其中一条，另一条仍在。
+       这里按「标题 + 区间」跨 routineId 归并例行体系内的任务，dropDup 会保留已完成那条。 */
+    const byTitleRange = {};
+    state.tasks.forEach(t=>{
+      if(!t || !t.start || !t.due) return;
+      const routineish = !!t.routineId || (typeof t.id==="string" && t.id.indexOf("rt_")===0);
+      if(!routineish) return;
+      const k=String(t.title||"").trim()+"|"+t.start+"~"+t.due;
+      (byTitleRange[k]=byTitleRange[k]||[]).push(t);
+    });
+    Object.keys(byTitleRange).forEach(k=>{ removed += dropDup(byTitleRange[k]); });
     if(removed>0){ save(); toast("已清理 "+removed+" 条过期/重复的例行任务"); }
     return removed;
   }
@@ -887,11 +942,15 @@
   function routineStateText(r){
     if(!r || !r.enabled) return "已停用";
     const occ = routineOccurrence(r, todayStr());
-    if(!occ) return "已生成 "+state.tasks.filter(x=>x.routineId===r.id).length+" 次";
+    const total = state.tasks.filter(x=>x.routineId===r.id).length;
+    if(!occ) return "已生成 "+total+" 次";
+    if(occurrenceSettled(r, occ)) return "本次已完成";   // 含跨规则同名已完成（另一条重复规则那条已做）
     const mine = state.tasks.filter(x=> x.routineId===r.id && !x.archived && x.routineOccKey===occ.key);
-    if(mine.some(x=>x.status==="done")) return "本次已完成";
     if(mine.length) return occ.start===occ.due ? "本次待完成" : "本次进行中";
-    return "已生成 "+state.tasks.filter(x=>x.routineId===r.id).length+" 次";
+    // v.42：重复规则的副本 —— 本次发生已被同名规则抢先生成（本条被守卫拦下，不再生成第二条），
+    // 按兄弟任务的实际状态显示，避免卡片只写「已生成 0 次」让人以为规则没生效。
+    if(occurrenceHasSibling(r, occ)) return occ.start===occ.due ? "本次待完成" : "本次进行中";
+    return "已生成 "+total+" 次";
   }
   function generateRoutines(targetDate, silent){
     const t = targetDate || todayStr();
@@ -902,6 +961,7 @@
       if(!occ) return;
       if(routineGenerated(r, occ.key)) return;
       if(occurrenceSettled(r, occ)) return;      // 本次已点过完成 → 终态，不再生成（无论是否逾期）
+      if(occurrenceHasSibling(r, occ)) return;   // 同名例行任务在本区间已存在（可能是另一条重复规则生成的）→ 不再生成第二条
       // 区间型守卫：同一规则在本区间（start~due）内只要已有未归档的任务，就绝不再生成第二条
       if(RANGEF.indexOf(r.freq)>=0 &&
          state.tasks.some(x=> x.routineId===r.id && !x.archived && x.due && x.due>=occ.start && x.due<=occ.due)) return;
@@ -936,6 +996,9 @@
         if(isNaN(occStart) || isNaN(occDue) || occDue < start || occStart > end) return;
         const alreadyExists = state.tasks.some(x=> x.routineId===r.id && x.routineOccKey===occ.key);
         if(alreadyExists) return;
+        // 已完结（含跨规则同名已完成）或已有同名兄弟任务：不实例化，避免甘特图出现"已做完却又冒出来"的幽灵条
+        if(occurrenceSettled(r, occ)) return;
+        if(occurrenceHasSibling(r, occ)) return;
         seen.add(occ.key);
         list.push({
           id:"rt_"+occ.key,
