@@ -200,16 +200,7 @@
   .cal-cell .cd{font-size:13px;font-weight:700;align-self:flex-end}
   .cal-chip{font-size:11.5px;line-height:1.3;background:#f3e9ff;color:#6b21a8;border-radius:6px;padding:2px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
   .cal-chip .ct{font-weight:700;margin-right:3px}
-  .cal-chip.done{background:#eef1f4;color:#9aa3ad;text-decoration:line-through}
   .cal-empty{color:var(--muted);font-size:12px;text-align:center;padding:6px 0}
-  /* 会议情况：待开 / 已完成 分组 */
-  .mtg-group{margin-top:6px}
-  details.mtg-group > summary{list-style:none;cursor:pointer}
-  details.mtg-group > summary::-webkit-details-marker{display:none}
-  .card.done{background:#fafbfc;border-style:dashed}
-  .card.done .item-title{color:#8a93a0}
-  .tag.done-tag{background:#e9edf2;color:#7a8493;border:1px solid #dde3ea;margin-left:6px;font-size:11px;padding:1px 6px;border-radius:10px;vertical-align:middle}
-  .ov-meet-item.ov-past{opacity:.55}
   .cal-tooltip{display:none;position:absolute;z-index:1000;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.55;color:var(--text);box-shadow:var(--shadow);max-width:240px;white-space:normal;pointer-events:none}
   .cal-tooltip div{word-break:break-word}
   /* 会议日历紧凑模式（在「日历」板块内，可缩小） */
@@ -571,7 +562,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.21.44"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.17.43"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1271,7 +1262,7 @@
     }
     html += `<div class="ov-welcome">
       <div class="ov-date">${t} ${wd}</div>
-      <div class="ov-title">${greet}，今日有 ${todos.length} 项待办 · ${upcoming.filter(x=>x.date===t && !meetingPast(x)).length} 场待开会议</div>
+      <div class="ov-title">${greet}，今日有 ${todos.length} 项待办 · ${upcoming.filter(x=>x.date===t).length} 场会议</div>
     </div>`;
     html += `<div class="ov-grid">`;
     /* 今日待办 */
@@ -1296,8 +1287,7 @@
     }else{
       html += `<div class="ov-meet">`+upcoming.map(x=>{
         const isToday = x.date===t;
-        const past = meetingPast(x);
-        return `<div class="ov-meet-item ${isToday?'ov-today':''}${past?' ov-past':''}"><div class="ov-dot"></div><div style="flex:1"><div style="font-weight:600">${esc(x.title)}${past?' <span class="tag done-tag">已结束</span>':''}</div><div class="ov-time">${isToday?'今天':esc(x.date)} ${esc(x.time||'')}${x.location?(' · '+esc(x.location)):''}</div></div></div>`;
+        return `<div class="ov-meet-item ${isToday?'ov-today':''}"><div class="ov-dot"></div><div style="flex:1"><div style="font-weight:600">${esc(x.title)}</div><div class="ov-time">${isToday?'今天':esc(x.date)} ${esc(x.time||'')}${x.location?(' · '+esc(x.location)):''}</div></div></div>`;
       }).join("")+`</div>`;
     }
     html += `<button class="ov-more" data-go="calendar">查看日历 →</button>`;
@@ -1730,9 +1720,8 @@
       let chips="";
       if(dayMeets.length){
         chips = dayMeets.map(x=>{
-          const past = meetingPast(x);
           const lbl=(x.time?('<span class="ct">'+esc(x.time)+'</span>'):'')+esc(x.title)+(x.location?(' · '+esc(x.location)):'');
-          return `<div class="cal-chip${past?' done':''}" data-mid="${esc(x.id)}">${lbl}</div>`;
+          return `<div class="cal-chip" data-mid="${esc(x.id)}">${lbl}</div>`;
         }).join("");
       }else if(inView){
         chips = `<div class="cal-empty">—</div>`;
@@ -2046,47 +2035,6 @@
   const MEET_LOC = ["5楼A1","5楼A2","5楼A3","5楼A4","5楼B1","5楼B2","5楼B3","5楼B4","5楼B5","5楼B6","10楼大会议室","10楼2","10楼3","线上会议"];
   function locOptions(sel){ return ['<option value=""'+(sel?"":" selected")+'>不设置地点</option>'].concat(MEET_LOC.map(l=>`<option value="${esc(l)}"${l===sel?" selected":""}>${esc(l)}</option>`)).join(""); }
 
-  /* 会议是否已过时间：派生状态，无需手点，由 date+time 与当前时间比较得出。
-     未填时间的会议按当天 23:59 计，到当天结束才归「已完成」。 */
-  function meetingPast(m){
-    if(!m || !m.date) return false;
-    const p = String(m.date).split("-").map(Number);
-    if(p.length!==3 || p.some(function(n){ return !isFinite(n); })) return false;
-    const tt = (m.time||"23:59").split(":").map(Number);
-    const dt = new Date(p[0], p[1]-1, p[2], tt[0]||0, tt[1]||0, 0);
-    return dt.getTime() < Date.now();
-  }
-
-  /* 单条会议卡片（会议情况板块用）。isPast=true 时加「已结束」标记、隐藏试推提醒。 */
-  function meetingCard(x, isPast){
-    if(editing[x.id]){
-      return `<div class="card"><div class="edit-box">
-        <div class="form-grid"><input id="e-date" type="date" value="${esc(x.date||'')}"><input id="e-time" type="time" value="${esc(x.time||'09:00')}"><select id="e-loc">${locOptions(x.location)}</select></div>
-        <input id="e-title" value="${esc(x.title)}" placeholder="会议主题">
-        <input id="e-note" value="${esc(x.note||'')}" placeholder="备注">
-        <div class="edit-actions"><button class="btn" data-cancel="${x.id}">取消</button><button class="btn btn-primary" data-save="meetings:${x.id}">保存</button></div>
-      </div></div>`;
-    }
-    const wxOn = !!state.settings.wxWebhook;
-    const remStatus = wxOn ? '<span class="tag p2">会前一天/1小时/10分钟提醒</span>' : '<span class="tag p1">未配置群机器人，不提醒</span>';
-    const remindLine = (x.date&&x.time) ? ('时间：'+esc(x.date)+' '+esc(x.time)+'　'+remStatus) : ('时间：未设置　'+remStatus);
-    const locLine = x.location ? ('地点：'+esc(x.location)) : '';
-    const pastTag = isPast ? '<span class="tag done-tag">已结束</span>' : '';
-    return `<div class="card${isPast?' done':''}"><div class="item-row">
-      <div class="item-main">
-        <div class="item-title">${esc(x.title)} ${pastTag}</div>
-        <div class="item-sub">${remindLine}</div>
-        ${locLine?`<div class="item-sub">${locLine}</div>`:''}
-        ${x.note?`<div class="item-sub">备注：${esc(x.note)}</div>`:''}
-      </div>
-      <div class="item-actions">
-        ${wxOn&&!isPast?`<button class="icon-btn" data-mpush="${x.id}" title="立即试推提醒"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>`:''}
-        <button class="icon-btn" data-edit="${x.id}" title="编辑"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>
-        <button class="icon-btn danger" data-del="meetings:${x.id}" title="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
-      </div>
-    </div></div>`;
-  }
-
   /* ---------- 会议情况 ---------- */
   function renderMeetings(){
     let html = dailyTasksHtml() + `<div class="view-head"><span class="sub">${viewMeta.meetings.s}</span></div>`;
@@ -2102,20 +2050,36 @@
       </div>
       <button class="btn btn-primary" id="m-add" style="margin-top:10px">+ 添加会议</button>
     </div>`;
-    if(!state.meetings.length){
-      html += `<div class="card empty">还没有会议记录</div>`;
-    }else{
-      const pending = state.meetings.filter(x=>!meetingPast(x)).sort((a,b)=> ((a.date||"")+(a.time||"")).localeCompare((b.date||"")+(b.time||"")));
-      const past = state.meetings.filter(x=> meetingPast(x)).sort((a,b)=> ((b.date||"")+(b.time||"")).localeCompare((a.date||"")+(b.time||"")));
-      html += `<div class="mtg-group"><div class="sub-head">待开 <small>${pending.length} 场</small></div>`;
-      if(!pending.length) html += `<div class="card empty">暂无待开会议</div>`;
-      else pending.forEach(x=>{ html += meetingCard(x, false); });
-      html += `</div>`;
-      html += `<details class="mtg-group done-grp"><summary class="sub-head">已完成 <small>${past.length} 场 · 点击展开</small></summary>`;
-      if(!past.length) html += `<div class="card empty">暂无已结束的会议</div>`;
-      else past.forEach(x=>{ html += meetingCard(x, true); });
-      html += `</details>`;
-    }
+    const list=[...state.meetings].sort((a,b)=> ((a.date||"")+(a.time||"")).localeCompare((b.date||"")+(b.time||"")));
+    if(!list.length) html += `<div class="card empty">还没有会议记录</div>`;
+    list.forEach(x=>{
+      if(editing[x.id]){
+        html += `<div class="card"><div class="edit-box">
+          <div class="form-grid"><input id="e-date" type="date" value="${esc(x.date||'')}"><input id="e-time" type="time" value="${esc(x.time||'09:00')}"><select id="e-loc">${locOptions(x.location)}</select></div>
+          <input id="e-title" value="${esc(x.title)}" placeholder="会议主题">
+          <input id="e-note" value="${esc(x.note||'')}" placeholder="备注">
+          <div class="edit-actions"><button class="btn" data-cancel="${x.id}">取消</button><button class="btn btn-primary" data-save="meetings:${x.id}">保存</button></div>
+        </div></div>`;
+        return;
+      }
+      const wxOn = !!state.settings.wxWebhook;
+      const remStatus = wxOn ? '<span class="tag p2">会前一天/1小时/10分钟提醒</span>' : '<span class="tag p1">未配置群机器人，不提醒</span>';
+      const remindLine = (x.date&&x.time) ? ('时间：'+esc(x.date)+' '+esc(x.time)+'　'+remStatus) : ('时间：未设置　'+remStatus);
+      const locLine = x.location ? ('地点：'+esc(x.location)) : '';   // 未设地点就不显示这一行
+      html += `<div class="card"><div class="item-row">
+        <div class="item-main">
+          <div class="item-title">${esc(x.title)}</div>
+          <div class="item-sub">${remindLine}</div>
+          ${locLine?`<div class="item-sub">${locLine}</div>`:''}
+          ${x.note?`<div class="item-sub">备注：${esc(x.note)}</div>`:''}
+        </div>
+        <div class="item-actions">
+          ${wxOn?`<button class="icon-btn" data-mpush="${x.id}" title="立即试推提醒"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>`:''}
+          <button class="icon-btn" data-edit="${x.id}" title="编辑"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>
+          <button class="icon-btn danger" data-del="meetings:${x.id}" title="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+        </div>
+      </div></div>`;
+    });
     document.getElementById("view-meetings").innerHTML = html;
     const addBtn=document.getElementById("m-add");
     if(addBtn) addBtn.onclick=()=>{
