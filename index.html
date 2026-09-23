@@ -581,7 +581,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.22.45"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.23.46"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -2541,11 +2541,11 @@
     root.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=()=>{
       if(confirm("彻底删除该项目？")){ const pid=b.getAttribute("data-pdel"); state.projects=state.projects.filter(x=>x.id!==pid); markTomb(pid); delete editing[pid]; save(); renderProjectList(); toast("已删除"); }
     });
-    const pkey=(attr)=>{ const k=b.getAttribute(attr); const ci=k.indexOf("::"); return {k, pid:k.slice(0,ci), idx:parseInt(k.slice(ci+2),10)}; };
+    const pkey=(btn,attr)=>{ const k=btn.getAttribute(attr); const ci=k.indexOf("::"); return {k, pid:k.slice(0,ci), idx:parseInt(k.slice(ci+2),10)}; };
     root.querySelectorAll("[data-pedit]").forEach(b=>b.onclick=()=>{ const k=b.getAttribute("data-pedit"); editing["progedit:"+k]=true; renderProjectList(); });
     root.querySelectorAll("[data-peditcancel]").forEach(b=>b.onclick=()=>{ const k=b.getAttribute("data-peditcancel"); delete editing["progedit:"+k]; renderProjectList(); });
     root.querySelectorAll("[data-peditsave]").forEach(b=>b.onclick=()=>{
-      const {k,pid,idx}=pkey("data-peditsave"); const pj=state.projects.find(x=>x.id===pid); if(!pj||!pj.progress||!pj.progress[idx]) return;
+      const {k,pid,idx}=pkey(b,"data-peditsave"); const pj=state.projects.find(x=>x.id===pid); if(!pj||!pj.progress||!pj.progress[idx]) return;
       const safe=k.replace(/:/g,"__");
       const txt=document.getElementById("pge-text-"+safe).value.trim();
       if(!txt){ toast("请填写进度内容"); return; }
@@ -2556,7 +2556,7 @@
       delete editing["progedit:"+k]; save(); renderProjectList(); toast("进度已更新");
     });
     root.querySelectorAll("[data-pdelprog]").forEach(b=>b.onclick=()=>{
-      const {pid,idx}=pkey("data-pdelprog"); const pj=state.projects.find(x=>x.id===pid); if(!pj) return;
+      const {pid,idx}=pkey(b,"data-pdelprog"); const pj=state.projects.find(x=>x.id===pid); if(!pj) return;
       if(confirm("删除这条进度记录？")){ pj.progress.splice(idx,1); save(); renderProjectList(); toast("已删除该进度"); }
     });
     bindItemEvents(box);
