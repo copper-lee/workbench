@@ -209,7 +209,6 @@
   .card.done{background:#fafbfc;border-style:dashed}
   .card.done .item-title{color:#8a93a0}
   .tag.done-tag{background:#e9edf2;color:#7a8493;border:1px solid #dde3ea;margin-left:6px;font-size:11px;padding:1px 6px;border-radius:10px;vertical-align:middle}
-  .ov-meet-item.ov-past{opacity:.55}
   .cal-tooltip{display:none;position:absolute;z-index:1000;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.55;color:var(--text);box-shadow:var(--shadow);max-width:240px;white-space:normal;pointer-events:none}
   .cal-tooltip div{word-break:break-word}
   /* 会议日历紧凑模式（在「日历」板块内，可缩小） */
@@ -581,7 +580,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.23.46"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.24.47"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1265,7 +1264,8 @@
     const greet = now.getHours()<12?"早上好":(now.getHours()<18?"下午好":"晚上好");
     const todos = state.tasks.filter(x=> taskVisibleToday(x, t)).sort(todayTaskSort);
     const t7 = dstr(addDays(6));   // 近一周：今天 ~ 今天+6，共 7 天（含今天）
-    const upcoming = state.meetings.filter(x=> x.date>=t && x.date<=t7)
+    /* 只列「待开」会议：今天已过时间的会议不在总览出现（仍可在「会议情况」板块和日历查看） */
+    const upcoming = state.meetings.filter(x=> x.date>=t && x.date<=t7 && !meetingPast(x))
       .sort((a,b)=> ((a.date||"")+(a.time||"")).localeCompare((b.date||"")+(b.time||""))).slice(0,6);
     let html = `<div class="view-head"><span class="sub">${viewMeta.overview.s}</span></div>`;
     /* 未开启云同步时给一条明确引导：手机/新设备打开时数据是空的，必须靠云端同步拉回 */
@@ -1306,8 +1306,7 @@
     }else{
       html += `<div class="ov-meet">`+upcoming.map(x=>{
         const isToday = x.date===t;
-        const past = meetingPast(x);
-        return `<div class="ov-meet-item ${isToday?'ov-today':''}${past?' ov-past':''}"><div class="ov-dot"></div><div style="flex:1"><div style="font-weight:600">${esc(x.title)}${past?' <span class="tag done-tag">已结束</span>':''}</div><div class="ov-time">${isToday?'今天':esc(x.date)} ${esc(x.time||'')}${x.location?(' · '+esc(x.location)):''}</div></div></div>`;
+        return `<div class="ov-meet-item ${isToday?'ov-today':''}"><div class="ov-dot"></div><div style="flex:1"><div style="font-weight:600">${esc(x.title)}</div><div class="ov-time">${isToday?'今天':esc(x.date)} ${esc(x.time||'')}${x.location?(' · '+esc(x.location)):''}</div></div></div>`;
       }).join("")+`</div>`;
     }
     html += `<button class="ov-more" data-go="calendar">查看日历 →</button>`;
@@ -3666,6 +3665,28 @@
   setInterval(checkReminders, 20000);
   // 自动同步：每 60 秒拉一次其他设备的改动（页面在后台时不打扰）；切回页面、网络恢复时立即补一次
   setInterval(()=>{ if(autoEnabled() && document.visibilityState==="visible") autoSync(); }, 60000);
+  /* 静默自动刷新：每 5 分钟按当前时间重画当前视图，让「会议是否已结束 / 今日待开会议数」等随时间变化的状态自动更新，不用手动刷新。
+     守卫：页面在后台、焦点在输入框、有编辑态、或有未提交的文本内容时一律跳过，绝不打断正在填写的内容。 */
+  setInterval(()=>{
+    try{
+      if(document.visibilityState && document.visibilityState!=="visible") return;
+      const ae=document.activeElement;
+      if(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName||"")) return;
+      if(Object.keys(editing).length) return;
+      const dirty=Array.from(document.querySelectorAll("input,textarea")).some(el=>{
+        const ty=String(el.type||"").toLowerCase();
+        if(["checkbox","radio","date","time","hidden","button","submit","file","color","range","image"].indexOf(ty)>=0) return false;
+        return String(el.value||"").trim()!=="";
+      });
+      if(dirty) return;
+      const act=document.querySelector(".view.active");
+      const v=act?String(act.id||"").replace(/^view-/,""):"overview";
+      const map={overview:renderOverview, calendar:renderCalendar, routines:renderRoutines, tasks:renderTasks,
+                 meetings:renderMeetings, projects:renderProjects, memos:renderMemos, ideas:renderIdeas, summary:renderSummary};
+      const fn=map[v];
+      if(fn) fn();
+    }catch(e){ /* 自动刷新失败必须静默，不能影响主流程 */ }
+  }, 300000);
   document.addEventListener("visibilitychange", ()=>{
     if(document.visibilityState==="visible"){ if(Date.now()-_lastSyncAt>15000) autoSync(); }
     else flushPendingPush();          // 切走（手机按 Home / 切 App）时立刻把改动推上去
