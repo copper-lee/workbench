@@ -107,6 +107,9 @@
   .erp-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .erp-val{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text)}
   .erp-pw{letter-spacing:2px}
+  .tbl{border-collapse:collapse;width:100%;font-size:13px}
+  .tbl th,.tbl td{border:1px solid var(--border,#e5e7eb);padding:6px 8px;text-align:left}
+  .tbl th{background:var(--bg,#f7f8fa);font-weight:600}
   .erp-link{border:none;background:none;color:var(--primary);font-size:12px;font-family:inherit;cursor:pointer;padding:2px;min-height:24px}
   .tag{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:999px;font-weight:600;margin-right:6px}
   .p0{background:#fde8e8;color:var(--danger)}
@@ -501,7 +504,7 @@
     <button class="nav-item" data-view="projects">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>项目管理
     </button>
-    <button class="nav-item" data-view="memos">
+        <button class="nav-item" data-view="memos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg>备忘录
     </button>
     <button class="nav-item" data-view="ideas">
@@ -543,7 +546,7 @@
     <section class="view" id="view-tasks"></section>
     <section class="view" id="view-meetings"></section>
     <section class="view" id="view-projects"></section>
-    <section class="view" id="view-memos"></section>
+        <section class="view" id="view-memos"></section>
     <section class="view" id="view-ideas"></section>
     <section class="view" id="view-summary"></section>
     <section class="view" id="view-settings"></section>
@@ -580,7 +583,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.24.47"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.28.55"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -761,7 +764,7 @@
     return null;
   }
   /* 例行规则「签名」：只看标题 + 周期 + 参数，忽略 id / created / enabled。
-     同一条规则被重复创建（例如在手机上又建了一遍「正常价目 每月1-15号」），签名就会相同。 */
+     同一条规则被重复创建（例如在手机上又建了一遍「示例例行 每月1-15号」），签名就会相同。 */
   function routineSig(r){
     if(!r) return "";
     const v=(x,d)=> (x===undefined||x===null)?d:x;
@@ -1073,7 +1076,7 @@
   }
 
   /* 恢复快照：首次打开且本地无数据时，用内置真实数据恢复（已有本地数据则忽略）。含个人 Webhook，仅供本机恢复使用 */
-  const RECOVERY_DATA = {"tasks":[{"id":"mtjt8fgp18pxj","title":"完成上周周报初稿","type":"temp","status":"done","archived":true,"due":"2026-08-30","doneAt":"2026-08-30","note":"已发主管","sample":true,"created":"2026-08-30"},{"id":"mtjtqf6k02zyl","type":"temp","title":"省医盘点分工","status":"todo","due":"2026-09-09","start":"","remind":true,"note":"","created":"2026-09-02"},{"id":"mtjtqml9nny0e","type":"temp","title":"寄售库存反馈","status":"todo","due":"2026-09-04","start":"2026-09-02","remind":false,"note":"","created":"2026-09-02"},{"id":"mtjtr5mwkfjv3","title":"正常价目","type":"temp","status":"todo","due":"2026-09-02","note":"（来自例行工作）","routineId":"mtjtq316lg6za","created":"2026-09-02","sample":false}],"meetings":[],"memos":[{"id":"mtjwscvbbatw4","title":"帮传举、晟睿申请可视化平台的权限","content":"","created":"2026-09-02","updated":"2026-09-02","updatedAt":1788342225959}],"ideas":[],"projects":[{"id":"mtjtqywspvksi","title":"寄售库存超270特殊审批","date":"","note":"","created":"2026-09-02","archived":false,"progress":[{"t":"2026-09-02 17:43","text":"英克的开发这周应该可以完成，到时发布测试版本给你们测试。海斌那边的审批流预计18号左右完成。"}],"updatedAt":1788342205605}],"routines":[{"id":"mtjtq316lg6za","title":"正常价目","freq":"monthlyRange","freqDetail":0,"freqWeekNum":1,"freqWeekDay":1,"rangeStart":1,"rangeEnd":15,"enabled":true,"created":"2026-09-02"}],"settings":{"wxWebhook":"SCT409155TxhcwtQUj36SWqAwBKiR9uEhv","wxChannel":"serverchan","sync":{"enabled":true,"updatedAt":0}},"meta":{"updatedAt":1788337131080},"_loopMigrated":true};
+  const RECOVERY_DATA = null;
 
   /* ---------- 初始数据 ---------- */
   let state = load();
@@ -1093,6 +1096,7 @@
   }
   if(!state.settings) state.settings={wxWebhook:"",wxChannel:"wx"};
   if(!state.settings.sync) state.settings.sync={enabled:false,token:"",gistId:"",updatedAt:0};
+  delete state.settlements; delete state.settleTemplates; delete state.settleFiles;
   /* AI 复盘：OpenAI 兼容接口直连（已实测四家均支持浏览器跨域）
      AI_ENABLED = false 时：复盘页隐藏「✨ AI 生成复盘」按钮与 AI 结果区，设置页隐藏「AI 复盘」配置；
      代码与已生成的复盘数据（state.aiReviews）全部保留，改成 true 即恢复，无需重新配置。 */
@@ -1160,7 +1164,7 @@
       {id:uid(), title:"提交三季度寄售库存盘点表", type:"temp", status:"todo", due:y, note:"需含近效期与长账龄明细", tags:"寄售,库存,盘点", regTime:t3+" 09:10", sample:true, created:t3},
       {id:uid(), title:"跟进A医院采购回款", type:"temp", status:"todo", due:t, note:"财务已开票，催确认到账", tags:"回款,客户A", regTime:t3+" 10:25", sample:true, created:t3},
       {id:uid(), title:"整理B客户近效期预警清单", type:"temp", status:"todo", due:t2, note:"", tags:"近效期,客户B", regTime:t3+" 14:40", sample:true, created:t3},
-      {id:uid(), title:"完成上周周报初稿", type:"temp", status:"done", archived:true, due:t3, doneAt:t3, note:"已发主管", tags:"周报", regTime:t3+" 17:05", sample:true, created:t3}
+      {id:uid(), title:"完成示例周报", type:"temp", status:"done", archived:true, due:t3, doneAt:t3, note:"示例备注", tags:"示例", regTime:t3+" 17:05", sample:true, created:t3}
     ];
     state.meetings = [
       {id:uid(), date:t, time:"14:30", title:"Q3 寄售库存复盘会", location:"5楼A1", note:"复盘近效期与长账龄清理进展", notified:{d1:false,h1:false,m10:false}, sample:true, created:t}
@@ -2379,7 +2383,7 @@
     bindItemEvents(document.getElementById("view-ideas"));
   }
 
-  /* ---------- 项目管理（长周期任务 · 可登记进度） ---------- */
+  /* ================= /* ---------- 项目管理（长周期任务 · 可登记进度） ---------- */
   // 单条进度：可编辑 / 可删除（idx 为该条在 progress 数组中的位置）
   function progLi(p, projId, idx){
     const key = projId+"::"+idx;
