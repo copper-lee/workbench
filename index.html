@@ -69,8 +69,44 @@
   .btn-danger{color:var(--danger);border-color:#f3c9c9}
   .today-empty{padding:14px;text-align:center;color:var(--muted);font-size:14px}
   /* 视图 */
-  .view{padding:16px 18px 90px;display:none}
+  .view{padding:16px 0 90px;display:none}
   .view.active{display:block}
+  /* 主区两栏：左侧各板块内容 + 右侧常驻「今日待办」栏（宽屏并排，窄屏见媒体查询） */
+  .main-body{flex:1;display:flex;align-items:flex-start;gap:14px;padding:0 18px}
+  .views{flex:1;min-width:0}
+  .rightbar{
+    flex:0 0 280px;width:280px;min-width:0;position:sticky;top:74px;align-self:flex-start;
+    max-height:calc(100vh - 96px);overflow-y:auto;padding:16px 0 24px;
+  }
+  .rightbar .card{margin-bottom:12px}
+  /* 右栏版今日待办：整体收紧一档；每条改成「勾选+标题」/「日期·备注」两行，
+     否则窄栏里 meta 会把标题挤成每行一个字 */
+  .rightbar .daily-banner{padding:12px}
+  .rightbar .daily-banner .db-head{margin-bottom:6px}
+  .rightbar .daily-banner .db-head .db-t{font-size:14px}
+  .rightbar .daily-banner .db-head .db-sub{font-size:12px}
+  .rightbar .db-item{
+    display:grid;grid-template-columns:auto 1fr;column-gap:8px;row-gap:1px;
+    align-items:center;padding:7px 0;
+  }
+  .rightbar .db-item .ck{grid-column:1;grid-row:1}
+  .rightbar .db-item .db-title{grid-column:2;grid-row:1;font-size:13.5px;overflow-wrap:anywhere}
+  .rightbar .db-item .db-meta{
+    grid-column:2;grid-row:2;font-size:11.5px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  /* 右栏「今日概览」小卡 */
+  .side-stats{padding:12px}
+  .side-stats .ss-head{font-weight:700;font-size:14px;color:var(--primary);margin-bottom:6px}
+  .side-stats .ss-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-top:1px dashed #e3ecff;font-size:13px}
+  .side-stats .ss-head+.ss-row{border-top:none}
+  .side-stats .ss-k{color:var(--muted)}
+  .side-stats .ss-v{font-weight:700}
+  .side-stats .ss-v.warn{color:var(--danger)}
+  .rightbar .side-more{
+    display:block;width:100%;margin-top:6px;border:none;background:transparent;color:var(--primary);
+    font-size:12.5px;text-align:center;cursor:pointer;font-family:inherit;padding:6px 0;
+  }
   .view-head{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
   .view-head h2{font-size:18px;margin:0}
   .view-head .sub{color:var(--muted);font-size:13px}
@@ -192,6 +228,7 @@
   .db-item .db-title{font-size:14.5px;font-weight:600;flex:1;min-width:0}
   .db-item .db-meta{font-size:12.5px;color:var(--muted)}
   .db-item.over .db-title{color:var(--danger)}
+  .db-mobile{display:none}   /* 手机端(≤767)才显示的顶部今日待办横幅；PC 端用右侧常驻栏，故默认隐藏 */
   /* 会议日历（月视图） */
   .cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:10px}
   .cal-nav .cal-m{font-size:16px;font-weight:700;margin-right:auto}
@@ -339,11 +376,12 @@
   input:checked + .slider:before{transform:translateX(18px)}
   /* toast */
   @media print{
-    .sidebar,.topbar,.mobile-tab,.sync-badge{display:none !important}
+    .sidebar,.topbar,.mobile-tab,.sync-badge,.rightbar,.db-mobile{display:none !important}
     .app{display:block;max-width:none}
     .view{display:none !important}
     #view-summary.view{display:block !important}
     body{background:#fff}
+    .main-body{display:block;padding:0}
     .main{padding:0}
     .no-print{display:none !important}
   }
@@ -352,6 +390,18 @@
     padding:10px 16px;border-radius:10px;font-size:14px;z-index:100;opacity:0;transition:opacity .25s;pointer-events:none;
   }
   .toast.show{opacity:1}
+  /* 窄屏（含手机）：右栏不再并排，改为置顶的「今日待办」卡片 —— 各板块顶部不再重复显示待办 */
+  @media (max-width:1023px){
+    .main-body{flex-direction:column;align-items:stretch;flex:0 0 auto;padding:0 12px}
+    .rightbar{
+      order:-1;width:auto;flex:0 0 auto;position:static;max-height:none;overflow:visible;
+      align-self:stretch;padding:12px 0 0;
+    }
+    .rightbar .daily-banner{padding:14px}
+    .rightbar .daily-banner .db-head .db-t{font-size:15px}
+    /* 窄屏待办卡置顶后条目多会淹没整屏：卡内滚动，最多占 44% 屏高 */
+    .rightbar #sideToday{max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  }
   /* 移动端底部 Tab */
   .mobile-tab{display:none}
   /* 移动端「更多」抽屉：收纳侧边栏里手机上不常驻的板块（PC 端始终隐藏） */
@@ -388,7 +438,10 @@
     .main{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:10px}
     .topbar{padding:10px 12px;gap:8px}
     .topbar .title{font-size:15px}
-    .view{padding:10px 10px 24px}
+    .view{padding:10px 0 24px}
+    .main-body{padding:0 10px}
+    .rightbar{display:none}          /* 手机端不显示 PC 右栏，恢复各板块顶部横幅 */
+    .db-mobile{display:block}        /* 手机端显示各板块顶部「今日待办」横幅（PC 端默认隐藏） */
     .mobile-tab{
       display:flex;flex:0 0 auto;position:relative;z-index:30;
       background:var(--card);border-top:1px solid var(--border);
@@ -539,17 +592,25 @@
       <input type="file" id="codeFileInput" accept=".html,text/html" hidden>
     </header>
 
-    <!-- 视图容器 -->
-    <section class="view active" id="view-overview"></section>
-    <section class="view" id="view-calendar"></section>
-    <section class="view" id="view-routines"></section>
-    <section class="view" id="view-tasks"></section>
-    <section class="view" id="view-meetings"></section>
-    <section class="view" id="view-projects"></section>
+    <!-- 视图容器 + 右侧常驻「今日待办」栏 -->
+    <div class="main-body">
+      <div class="views">
+        <section class="view active" id="view-overview"></section>
+        <section class="view" id="view-calendar"></section>
+        <section class="view" id="view-routines"></section>
+        <section class="view" id="view-tasks"></section>
+        <section class="view" id="view-meetings"></section>
+        <section class="view" id="view-projects"></section>
         <section class="view" id="view-memos"></section>
-    <section class="view" id="view-ideas"></section>
-    <section class="view" id="view-summary"></section>
-    <section class="view" id="view-settings"></section>
+        <section class="view" id="view-ideas"></section>
+        <section class="view" id="view-summary"></section>
+        <section class="view" id="view-settings"></section>
+      </div>
+      <aside class="rightbar" id="rightbar">
+        <div id="sideToday"></div>
+        <div id="sideStats"></div>
+      </aside>
+    </div>
   </div>
 </div>
 
@@ -583,7 +644,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.28.56"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.28.58"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1251,6 +1312,8 @@
     });
     return `<div class="card daily-banner"><div class="db-head"><span class="db-t">今日待办（含逾期）</span><span class="db-sub">${list.length} 项待处理</span></div>${items}</div>`;
   }
+  /* 手机端顶部横幅：与 dailyTasksHtml 同内容，但用 .db-mobile 包裹，仅在 ≤767 显示；PC 端改用右侧常驻栏 */
+  function mobileBannerHtml(){ return `<div class="db-mobile">${dailyTasksHtml()}</div>`; }
   /* 今日待办横幅的勾选框单独绑定：横幅被注入到多个视图，
      只绑列表容器的视图（工作/项目）会漏掉横幅，导致点击无反应 */
   function bindDailyBanner(root){
@@ -1258,6 +1321,32 @@
     root.querySelectorAll(".daily-banner [data-done]").forEach(el=>{
       el.onclick=(e)=>{ e.stopPropagation(); setTaskDone(el.getAttribute("data-done")); };
     });
+  }
+
+  /* ---------- 右侧常驻栏：今日待办 + 今日概览（各板块顶部不再重复贴待办） ---------- */
+  function sideStatsHtml(){
+    const t = todayStr();
+    const list = state.tasks.filter(x=> taskVisibleToday(x, t));
+    const over = list.filter(x=> x.due && x.due < t).length;
+    const today = list.filter(x=> x.due === t).length;
+    const nodue = list.filter(x=> !x.due).length;
+    return `<div class="card side-stats">
+      <div class="ss-head">今日概览</div>
+      <div class="ss-row"><span class="ss-k">逾期未完成</span><span class="ss-v${over?' warn':''}">${over}</span></div>
+      <div class="ss-row"><span class="ss-k">今天到期</span><span class="ss-v">${today}</span></div>
+      <div class="ss-row"><span class="ss-k">未设期限</span><span class="ss-v">${nodue}</span></div>
+      <button class="side-more" data-go="tasks">查看全部工作 →</button>
+    </div>`;
+  }
+  function renderSiderail(){
+    const todayBox = document.getElementById("sideToday");
+    const statBox  = document.getElementById("sideStats");
+    if(!todayBox || !statBox) return;
+    todayBox.innerHTML = dailyTasksHtml();
+    statBox.innerHTML  = sideStatsHtml();
+    const rail = document.getElementById("rightbar");
+    bindDailyBanner(rail);
+    if(rail) rail.querySelectorAll("[data-go]").forEach(b=> b.onclick=()=> setView(b.getAttribute("data-go")));
   }
 
   /* ---------- 工作总览 ---------- */
@@ -1690,9 +1779,11 @@
     const tasks = baseTasks.concat(routineTasksForRange(startStr, endStr));
     const numDays = 7;
     function idxOf(dstr){ let i=Math.round((mid(parse(dstr))-mid(start))/DAY); return Math.max(0,Math.min(numDays-1,i)); }
-    const _mainEl = document.querySelector(".main");
-    const _mw = _mainEl ? _mainEl.clientWidth : 0;
-    const COLW = Math.min(160, Math.max(84, Math.floor((Math.max(_mw, 760) - 48) / 7)));   // 7 天铺满容器宽度
+    /* 列宽按「内容区」宽度算：右侧待办栏常驻后 .main 比内容区宽 280px，
+       再用 .main 会把 7 天算超宽，导致甘特图横向溢出、任务列被挤没 */
+    const _hostEl = document.querySelector(".views") || document.querySelector(".main");
+    const _mw = _hostEl ? _hostEl.clientWidth : 0;
+    const COLW = Math.min(160, Math.max(64, Math.floor((Math.max(_mw, 448) - 40) / 7)));   // 7 天铺满内容区宽度
     let head="";
     for(let i=0;i<numDays;i++){
       const d=new Date(start); d.setDate(d.getDate()+i);
@@ -1752,8 +1843,7 @@
       }
       grid += `<div class="cal-cell${inView?'':' out'}${isT?' today':''}"><span class="cd">${day}</span>${chips}</div>`;
     }
-    let html = dailyTasksHtml();
-    html += `<div class="view-head"><span class="sub">工作甘特图 + 会议日历（可切换周 / 月）</span></div>`;
+    let html = `<div class="view-head"><span class="sub">工作甘特图 + 会议日历（可切换周 / 月）</span></div>`;
     const ganttLabel = dstr(start)+" ~ "+dstr(end);
     const ganttNav = `<div class="cal-nav no-print">
       <button class="btn" id="gantt-prev">‹ 上一周</button>
@@ -1775,7 +1865,7 @@
       <button class="btn btn-ghost" id="cal-this">回到本${calMode==='month'?'月':'周'}</button>
     </div>`;
     html += `<div class="cal-grid cal-compact">${dowHtml}${grid}</div>`;
-    document.getElementById("view-calendar").innerHTML = html;
+    document.getElementById("view-calendar").innerHTML = mobileBannerHtml() + html;
     const prev=document.getElementById("cal-prev"); if(prev) prev.onclick=()=>{ if(calMode==="month"){ calAnchor.setMonth(calAnchor.getMonth()-1); } else { calAnchor.setDate(calAnchor.getDate()-7); } renderCalendar(); };
     const next=document.getElementById("cal-next"); if(next) next.onclick=()=>{ if(calMode==="month"){ calAnchor.setMonth(calAnchor.getMonth()+1); } else { calAnchor.setDate(calAnchor.getDate()+7); } renderCalendar(); };
     const thisBtn=document.getElementById("cal-this"); if(thisBtn) thisBtn.onclick=()=>{ calAnchor=new Date(); renderCalendar(); };
@@ -1789,12 +1879,14 @@
       if(m){ chip.onmouseenter = e=>showCalTooltip(e,m); chip.onmouseleave = hideCalTooltip; }
     });
     bindItemEvents(document.getElementById("view-calendar"));
+    bindDailyBanner(document.getElementById("view-calendar"));
   }
 
   /* ---------- 渲染分发 ---------- */
   function renderAll(){
     const safe=(fn,name)=>{ try{ fn(); }catch(e){ console.error("[render "+name+"] 渲染失败：", e); } };
     safe(renderOverview,"overview");
+    safe(renderSiderail,"siderail");
     safe(renderCalendar,"calendar");
     safe(renderRoutines,"routines");
     safe(renderTasks,"tasks");
@@ -1804,6 +1896,8 @@
     safe(renderIdeas,"ideas");
     safe(renderSummary,"summary");
     safe(renderSettings,"settings");
+    /* 各板块顶部「今日待办」手机端横幅（.db-mobile，仅 ≤767 显示）的勾选框统一在此绑定 */
+    document.querySelectorAll(".views .view").forEach(v=> bindDailyBanner(v));
     const bcs=document.getElementById("btnClearSample"); if(bcs) bcs.style.display = localStorage.getItem(SEED_FLAG) ? "" : "none";
   }
 
@@ -1988,7 +2082,7 @@
     </div></div>`;
   }
   function renderTasks(){
-    let html = dailyTasksHtml() + `<div class="view-head"><span class="sub">${viewMeta.tasks.s}</span><button class="btn btn-ghost" data-go="routines" style="margin-left:auto">⚙ 配置例行工作</button></div>`;
+    let html = `<div class="view-head"><span class="sub">${viewMeta.tasks.s}</span><button class="btn btn-ghost" data-go="routines" style="margin-left:auto">⚙ 配置例行工作</button></div>`;
     html += filterBarHtml("tasks");
     html += `<div class="card">
       <div class="form-grid">
@@ -2005,7 +2099,7 @@
       <button class="btn btn-primary" id="tt-add">+ 添加工作</button>
     </div>`;
     html += `<div id="task-list"></div>`;
-    document.getElementById("view-tasks").innerHTML = html;
+    document.getElementById("view-tasks").innerHTML = mobileBannerHtml() + html;
     const ttAdd=document.getElementById("tt-add");
     const ttRem=document.getElementById("tt-remind");
     const ttStartF=document.getElementById("tt-start-field");
@@ -2038,7 +2132,6 @@
     if(goBtn) goBtn.onclick=()=>setView("routines");
     wireFilter("tasks", renderTaskList);
     renderTaskList();
-    bindDailyBanner(document.getElementById("view-tasks"));
   }
   function renderTaskList(){
     const box=document.getElementById("task-list"); if(!box) return;
@@ -2102,7 +2195,7 @@
 
   /* ---------- 会议情况 ---------- */
   function renderMeetings(){
-    let html = dailyTasksHtml() + `<div class="view-head"><span class="sub">${viewMeta.meetings.s}</span></div>`;
+    let html = `<div class="view-head"><span class="sub">${viewMeta.meetings.s}</span></div>`;
     html += `<div class="card">
       <div class="form-grid">
         <div class="field"><label>会议主题</label><input id="m-title" placeholder="如：Q3 复盘会"></div>
@@ -2129,7 +2222,7 @@
       else past.forEach(x=>{ html += meetingCard(x, true); });
       html += `</details>`;
     }
-    document.getElementById("view-meetings").innerHTML = html;
+    document.getElementById("view-meetings").innerHTML = mobileBannerHtml() + html;
     const addBtn=document.getElementById("m-add");
     if(addBtn) addBtn.onclick=()=>{
       const title=document.getElementById("m-title").value.trim();
@@ -2453,8 +2546,7 @@
     </div></div>`;
   }
   function renderProjects(){
-    let html = dailyTasksHtml();
-    html += `<div class="view-head"><span class="sub">${viewMeta.projects.s}</span></div>`;
+    let html = `<div class="view-head"><span class="sub">${viewMeta.projects.s}</span></div>`;
     html += filterBarHtml("projects");
     html += `<div class="card">
       <div class="form-grid">
@@ -2465,7 +2557,7 @@
       <button class="btn btn-primary" id="pj-add">+ 新增项目</button>
     </div>`;
     html += `<div id="project-list"></div>`;
-    document.getElementById("view-projects").innerHTML = html;
+    document.getElementById("view-projects").innerHTML = mobileBannerHtml() + html;
     const add=document.getElementById("pj-add");
     if(add) add.onclick=()=>{
       const title=document.getElementById("pj-title").value.trim();
@@ -2475,7 +2567,6 @@
     };
     wireFilter("projects", renderProjectList);
     renderProjectList();
-    bindDailyBanner(document.getElementById("view-projects"));
   }
   function renderProjectList(){
     const box=document.getElementById("project-list"); if(!box) return;
