@@ -583,7 +583,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.28.55"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.28.56"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -1058,7 +1058,7 @@
         });
       });
     } else {
-      ARRAYS.forEach(k=> (state[k]||[]).forEach(x=>{ if(x&&!x.updatedAt) x.updatedAt=Date.now(); }));
+      ARRAYS.forEach(k=> (state[k]||[]).forEach(x=>{ if(x&&!x.updatedAt) x.updatedAt=0; }));   // 兜底时间戳用 0 而非当前时间：避免缺时间戳的陈旧/示例/拉回条目在合并时反超真实新改动
     }
     state.meta = state.meta || {updatedAt:Date.now()};
     const payload=JSON.stringify(state);
@@ -2837,6 +2837,7 @@
               <button class="btn" id="set-gist-new">新建云端仓库</button>
               <button class="btn btn-primary" id="set-sync-now">立即同步</button>
               <button class="btn" id="set-sync-diag" title="对比本机与云端数据，定位同步卡在哪一环">同步自检</button>
+              <button class="btn btn-ghost" id="set-reset-cloud" title="丢弃本机所有业务数据，完全以云端为准重新拉取">以云端为准覆盖本机</button>
             </div>
             <span class="hint" id="syncHint">未开启</span>
             <div id="fileWarn" class="file-warn" style="display:none">⚠️ 当前以 <b>file://</b> 方式打开。<b>Chrome / Edge 用户可直接点「立即同步」尝试</b>，大概率能成功；若提示失败，或你用的是 Safari，请改用 <code>http://localhost:8080/个人工作台.html</code> 访问。</div>
@@ -2969,6 +2970,7 @@
     const gn=document.getElementById("set-gist-new"); if(gn) gn.onclick=createGist;
     const sn=document.getElementById("set-sync-now"); if(sn) sn.onclick=syncNow;
     const sd=document.getElementById("set-sync-diag"); if(sd) sd.onclick=runSyncDiag;
+    const rc=document.getElementById("set-reset-cloud"); if(rc) rc.onclick=resetFromCloud;
     const sh=document.getElementById("syncHint"); if(sh) sh.textContent = isSyncOn()? "已开启，改动将自动同步" : (state.settings.sync.token? "已填 Token，填 Gist ID 或点「新建云端仓库」" : "未配置");
     const fw=document.getElementById("fileWarn"); if(fw) fw.style.display = (location.protocol==="file:") ? "block" : "none";
     const vc=document.getElementById("verCur"); if(vc) vc.textContent="v"+APP_VERSION;
@@ -3276,6 +3278,9 @@
     if(copy.settings && copy.settings.sync){ delete copy.settings.sync.token; delete copy.settings.sync.gistId; }
     /* AI Key 默认不上传云端（用户未勾选「随云端同步」时剔除） */
     if(copy.settings && copy.settings.ai && !copy.settings.ai.syncKey) delete copy.settings.ai.key;
+    /* 示例数据（sample:true）永不进云端：避免某台新设备把演示数据推上 Gist，污染所有设备的云端备份 */
+    const ARR=['tasks','meetings','memos','ideas','projects','routines','misc','aiReviews'];
+    ARR.forEach(k=>{ if(Array.isArray(copy[k])) copy[k]=copy[k].filter(x=>!(x&&x.sample)); });
     return JSON.stringify(copy);
   }
   function setSyncStatus(txt, kind){
@@ -3297,6 +3302,25 @@
       if(msg==="Load failed" || msg==="Failed to fetch") msg="网络请求被拦截，常见原因：广告拦截插件、公司网络限制、浏览器不允许 file:// 页面访问 api.github.com。请点「检查 Token」或按 F12 看控制台红字。";
       setSyncStatus("同步失败","sb-err"); toast("同步失败："+msg);
     }).finally(()=>{ _autoBusy=false; });   // 必须释放同步锁，否则自动同步会被永久挡住
+  }
+  /* 以云端为准覆盖本机：清空本机所有业务数据后重新从云端拉取。
+     用于某台设备本地副本跑偏（陈旧 / 混入示例 / 互相覆盖）时一键对齐云端。会丢弃本机尚未同步到云端的改动。 */
+  async function resetFromCloud(){
+    if(!isSyncOn()){ toast("请先在设置中开启并配置云端同步"); setView("settings"); return; }
+    if(!confirm("将以云端数据覆盖本机数据。本机尚未同步到云端的改动会丢失，确定继续？")) return;
+    const ARR=['tasks','meetings','memos','ideas','projects','routines','misc','aiReviews'];
+    ARR.forEach(k=>{ state[k]=[]; });
+    setSyncStatus("正在从云端恢复…","sb-busy");
+    try{
+      await pullSync();
+      save(); renderAll();
+      setSyncStatus("已同步 "+new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"}));
+      toast("已从云端恢复本机数据");
+    }catch(e){
+      console.error("[reset from cloud]", e);
+      setSyncStatus("恢复失败","sb-err");
+      toast("恢复失败："+(e&&e.message?e.message:e));
+    }
   }
   /* ---------- 同步自检：本机 vs 云端，定位数据卡在哪一端 ---------- */
   const ARR_NAME={tasks:"工作",meetings:"会议",memos:"备忘",ideas:"灵感",projects:"项目",routines:"例行"};
