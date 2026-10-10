@@ -644,7 +644,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.28.61"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.28.62"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -2535,7 +2535,6 @@
         ${x.date?`<div class="item-sub">项目日期：${esc(x.date)}</div>`:''}
         ${x.note?`<div class="item-sub">${esc(x.note)}</div>`:''}
         <div class="item-sub" style="font-size:12px">创建于 ${esc(x.created||'')}${last?(' · 最近更新 '+esc(last.t)):''}</div>
-        ${progHtml}${form}
       </div>
       <div class="item-actions">
         <button class="icon-btn" data-preg="${x.id}" title="登记进度"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -2543,7 +2542,7 @@
         <button class="icon-btn" data-parch="${x.id}" title="归档"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg></button>
         <button class="icon-btn danger" data-pdel="${x.id}" title="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
       </div>
-    </div></div>`;
+    </div>${progHtml}${form}</div>`;
   }
   function renderProjects(){
     let html = `<div class="view-head"><span class="sub">${viewMeta.projects.s}</span></div>`;
@@ -2601,13 +2600,12 @@
             ${x.date?`<div class="item-sub">项目日期：${esc(x.date)}</div>`:''}
             ${x.note?`<div class="item-sub">${esc(x.note)}</div>`:''}
             <div class="item-sub" style="font-size:12px">创建于 ${esc(x.created||'')}</div>
-            ${progHtml}
           </div>
           <div class="item-actions">
             <button class="icon-btn" data-prestore="${x.id}" title="恢复到项目"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
             <button class="icon-btn danger" data-pdel="${x.id}" title="彻底删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
           </div>
-        </div></div>`;
+        </div>${progHtml}</div>`;
       });
     }
     box.innerHTML = h;
