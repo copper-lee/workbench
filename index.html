@@ -644,7 +644,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.28.62"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.28.63"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -2149,7 +2149,7 @@
   }
 
   /* ---------- 会议地点选项 ---------- */
-  const MEET_LOC = ["5楼A1","5楼A2","5楼A3","5楼A4","5楼B1","5楼B2","5楼B3","5楼B4","5楼B5","5楼B6","10楼大会议室","10楼2","10楼3","线上会议"];
+  const MEET_LOC = ["5楼A1","5楼A2","5楼A3","5楼A4","5楼B1","5楼B2","5楼B3","5楼B4","5楼B5","5楼B6","10楼大会议室","10楼2","10楼3","10楼4-党群活动室","线上会议"];
   function locOptions(sel){ return ['<option value=""'+(sel?"":" selected")+'>不设置地点</option>'].concat(MEET_LOC.map(l=>`<option value="${esc(l)}"${l===sel?" selected":""}>${esc(l)}</option>`)).join(""); }
 
   /* 会议是否已过时间：派生状态，无需手点，由 date+time 与当前时间比较得出。
