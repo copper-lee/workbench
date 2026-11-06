@@ -644,7 +644,7 @@
   "use strict";
   const STORE_KEY = "wb_workbench_data_v1";
   const SEED_FLAG  = "wb_workbench_seeded";
-  const APP_VERSION = "2026.09.28.63"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
+  const APP_VERSION = "2026.09.28.64"; // 工作台代码版本（每次改功能后由助手递增末位），用于跨设备"自检更新"
   const editing = {}; // 正在编辑的条目 id
 
   /* ---------- 工具 ---------- */
@@ -2477,6 +2477,22 @@
   }
 
   /* ================= /* ---------- 项目管理（长周期任务 · 可登记进度） ---------- */
+  // 进度时间 → 时间戳（"YYYY-MM-DD HH:MM"，缺时间按当天 00:00；无法解析返回 0）
+  function progTs(p){
+    const s = String((p && p.t) || "").trim();
+    const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
+    if(!m) return 0;
+    const d = new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), 0);
+    const n = d.getTime();
+    return isNaN(n) ? 0 : n;
+  }
+  // 按进度时间倒序返回原始下标（时间最新在前；同时间保持登记顺序）
+  function progIdxByTime(prog){
+    return prog.map((p,i)=>i).sort((a,b)=>{
+      const d = progTs(prog[b]) - progTs(prog[a]);
+      return d !== 0 ? d : a - b;
+    });
+  }
   // 单条进度：可编辑 / 可删除（idx 为该条在 progress 数组中的位置）
   function progLi(p, projId, idx){
     const key = projId+"::"+idx;
@@ -2509,13 +2525,15 @@
       </div></div>`;
     }
     const prog = x.progress || [];
-    const last = prog[prog.length-1];
     const showAll = editing["allprog:"+x.id];
+    // 统一按「进度时间」倒序：时间最新的在最上面；收起时只保留时间最新的一条（不看登记先后）
+    const order = progIdxByTime(prog);
+    const last = prog.length ? prog[order[0]] : null; // 「最近更新」取时间最新的一条
     let progHtml;
     if(prog.length){
-      const visible = showAll ? prog : [last];
-      const li = visible.map((p,i)=> progLi(p, x.id, showAll ? i : prog.length-1)).join("");
-      const headTxt = showAll ? ('全部进度（'+prog.length+' 条）') : ('最新进度（共 '+prog.length+' 条，仅显示最新一条）');
+      const visible = showAll ? order : order.slice(0,1);
+      const li = visible.map(i=> progLi(prog[i], x.id, i)).join("");
+      const headTxt = showAll ? ('全部进度（'+prog.length+' 条）') : ('最新进度（共 '+prog.length+' 条，仅显示日期最新一条）');
       progHtml = `<div class="proj-prog"><div class="pp-t">${headTxt}</div><ul class="pp-list">${li}</ul>`
         + (prog.length>1 ? `<button class="btn btn-ghost" data-pall="${x.id}" style="margin-top:8px">${showAll?'收起':'展开全部 '+prog.length+' 条进度'}</button>` : '')
         + `</div>`;
@@ -2591,7 +2609,7 @@
         const prog = x.progress||[];
         let progHtml="";
         if(prog.length){
-          const li = prog.map((p,i)=> progLi(p, x.id, i)).join("");
+          const li = progIdxByTime(prog).map(i=> progLi(prog[i], x.id, i)).join("");
           progHtml = `<div class="proj-prog"><div class="pp-t">全部进度（${prog.length} 条）</div><ul class="pp-list">${li}</ul></div>`;
         }
         h += `<div class="card"><div class="item-row">
